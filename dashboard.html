@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#173B33">
+  <title>Dashboard — Kepcord</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="shell"><main class="pg" id="page"></main></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+function chart(data) {
+  const W = 600, H = 230, pad = { l: 6, r: 6, t: 22, b: 28 };
+  const max = Math.max(1, ...data.map((d) => d.value));
+  const bw = (W - pad.l - pad.r) / data.length;
+  const step = Math.ceil(data.length / 7);
+  const total = data.reduce((s, d) => s + d.value, 0);
+  const bars = data.map((d, i) => {
+    const h = ((H - pad.t - pad.b) * d.value) / max;
+    const x = pad.l + i * bw;
+    return `<rect x="${x + bw * 0.16}" y="${H - pad.b - h}" width="${bw * 0.68}" height="${d.value ? Math.max(h, 2) : 0}" rx="4" fill="var(--gr)"/>` +
+      (data.length <= 7 && d.value > 0 ? `<text class="v" x="${x + bw / 2}" y="${H - pad.b - h - 6}" text-anchor="middle">${naira(d.value)}</text>` : "") +
+      (i % step === 0 ? `<text x="${x + bw / 2}" y="${H - 8}" text-anchor="middle">${esc(d.label)}</text>` : "");
+  }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Sales over the last ${data.length} days, total ${naira(total)}">
+    <line x1="${pad.l}" x2="${W - pad.r}" y1="${H - pad.b}" y2="${H - pad.b}" stroke="var(--ln)" stroke-width="2"/>${bars}</svg>`;
+}
+
+boot({ id: "dashboard", mgmt: true }, async (me, root) => {
+  let days = 7;
+  async function render() {
+    const [sum, series, recent] = await Promise.all([
+      api.reports.summary(), api.reports.salesByDay(days), api.orders.recent(8),
+    ]);
+    root.innerHTML = `
+      <h1>Dashboard</h1>
+      <p class="mu">Voided orders are not counted in sales.</p>
+      <div class="figs">
+        <div><b>${naira(sum.todaySales)}</b><span>Sales today</span></div>
+        <div><b>${sum.todayOrders}</b><span>Orders today</span></div>
+        <div><b>${naira(sum.weekSales)}</b><span>Last 7 days</span></div>
+        <div><b>${sum.lowCount}</b><span>Low or out of stock</span></div>
+        <div><b>${sum.openReqs}</b><span>Open requisitions</span></div>
+      </div>
+
+      <h2>Sales</h2>
+      <div class="seg" role="group" aria-label="Period">
+        ${[7, 30].map((n) => `<button class="${days === n ? "on" : ""}" aria-pressed="${days === n}" data-days="${n}">${n} days</button>`).join("")}
+      </div>
+      ${chart(series)}
+
+      <h2>Best sellers (30 days)</h2>
+      ${sum.top.length === 0 ? '<p class="mu">No sales yet.</p>' :
+        `<table><tbody>${sum.top.map((t) => `<tr><td>${esc(t.name)}</td><td class="n">${num(t.qty)} sold</td></tr>`).join("")}</tbody></table>`}
+
+      <h2>Latest orders</h2>
+      ${recent.length === 0 ? '<p class="mu">No orders yet.</p>' : `
+        <div class="sc"><table>
+          <thead><tr><th>When</th><th>By</th><th>Items</th><th class="n">Total</th></tr></thead>
+          <tbody>${recent.map((o) => `<tr>
+            <td>${when(o.at)}</td><td>${esc(o.byName)}</td>
+            <td>${o.lines.map((l) => `${l.qty} × ${esc(l.name)}`).join(", ")}${o.voided ? '<span class="tag">VOIDED</span>' : ""}</td>
+            <td class="n">${naira(o.total)}</td></tr>`).join("")}</tbody>
+        </table></div>`}`;
+    root.querySelectorAll("[data-days]").forEach((b) => (b.onclick = () => { days = Number(b.dataset.days); render().catch((e) => toast(e.message, true)); }));
+  }
+  await render();
+});
+  </script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#173B33">
+  <title>Employees — Kepcord</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="shell"><main class="pg" id="page"></main></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+boot({ id: "employees", mgmt: true }, async (me, root) => {
+  let list = [];
+
+  async function load() { list = await api.employees.list(); draw(); }
+
+  function draw() {
+    root.innerHTML = `
+      <h1>Employees</h1>
+      <p class="mu">Each employee signs in with their own email and password. Everything they record carries their name.</p>
+
+      <form class="panel" id="addForm">
+        <h2>Add an employee</h2>
+        <div class="row">
+          <label>Full name<input id="eName" required></label>
+          <label>Email<input id="eEmail" type="email" autocomplete="off" required></label>
+          <label>Password (8+)<input id="ePass" type="text" autocomplete="off" required></label>
+          <button class="pri">Add</button>
+        </div>
+      </form>
+
+      <div class="sc"><table>
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr></thead>
+        <tbody>${list.map((u) => `<tr>
+          <td>${esc(u.name)}</td><td>${esc(u.email)}</td>
+          <td>${u.role === "management" ? "Management" : "Employee"}</td>
+          <td>${u.role === "employee"
+            ? `<button class="lnk" data-reset="${u.id}">Reset password</button><button class="lnk del" data-rm="${u.id}">Remove</button>` : ""}</td></tr>`).join("")}</tbody>
+      </table></div>`;
+  }
+
+  async function run(fn, ok) {
+    try { await fn(); toast(ok); await load(); } catch (e) { toast(e.message, true); }
+  }
+
+  root.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const v = (id) => document.getElementById(id).value;
+    run(() => api.employees.add({ name: v("eName"), email: v("eEmail"), password: v("ePass") }), "Employee added");
+  });
+  root.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    const u = list.find((x) => x.id === (b.dataset.reset || b.dataset.rm));
+    if (b.dataset.reset) {
+      const pw = window.prompt(`New password for ${u.name} (8+ characters):`);
+      if (pw) run(() => api.employees.resetPassword(u.id, pw), "Password reset");
+    }
+    if (b.dataset.rm && window.confirm(`Remove ${u.name}?`)) run(() => api.employees.remove(u.id), "Employee removed");
+  });
+
+  await load();
+});
+  </script>
+</body>
+</html>

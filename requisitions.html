@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#173B33">
+  <title>Requisitions — Kepcord</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="shell"><main class="pg" id="page"></main></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+boot({ id: "requisitions" }, async (me, root) => {
+  const isM = me.role === "management";
+  let open = [], closed = [];
+  const qty = {};
+
+  async function load() {
+    [open, closed] = await Promise.all([api.requisitions.open(), api.requisitions.closed()]);
+    draw();
+  }
+
+  function draw() {
+    root.innerHTML = `
+      <h1>Requisitions</h1>
+      <p class="mu">Raised automatically when an ingredient reaches its reorder level or runs out. When the goods arrive, mark it received and the stock goes up.</p>
+
+      ${open.length === 0 ? "<p>Nothing to reorder right now.</p>" : `
+        <div class="sc"><table>
+          <thead><tr><th>Ingredient</th><th>Needed</th><th>Received</th><th></th></tr></thead>
+          <tbody>${open.map((r) => `<tr>
+            <td>${esc(r.name)}<div class="mu">${esc(r.reason)} · ${when(r.at)}</div></td>
+            <td class="n">${num(r.qty)} ${esc(r.unit)}</td>
+            <td><input type="number" inputmode="decimal" min="0" step="any" data-q="${r.id}" aria-label="Quantity received for ${esc(r.name)}" value="${qty[r.id] ?? r.qty}"></td>
+            <td><button class="pri" data-recv="${r.id}">Mark received</button>
+                ${isM ? `<button class="lnk del" data-dismiss="${r.id}">Dismiss</button>` : ""}</td></tr>`).join("")}</tbody>
+        </table></div>`}
+
+      <h2>History</h2>
+      ${closed.length === 0 ? '<p class="mu">Nothing yet.</p>' : `
+        <div class="sc"><table>
+          <thead><tr><th>Ingredient</th><th>Result</th><th>Closed</th></tr></thead>
+          <tbody>${closed.map((r) => `<tr>
+            <td>${esc(r.name)}</td>
+            <td>${r.status === "received" ? `Received ${num(r.receivedQty)} ${esc(r.unit)}` : "Dismissed"}</td>
+            <td>${when(r.closedAt)} · ${esc(r.closedBy || "")}</td></tr>`).join("")}</tbody>
+        </table></div>`}`;
+  }
+
+  async function act(fn, ok) {
+    try { await fn(); toast(ok); } catch (e) { toast(e.message, true); }
+    load();
+  }
+
+  root.addEventListener("input", (e) => { if (e.target.dataset.q) qty[e.target.dataset.q] = e.target.value; });
+  root.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.dataset.recv) act(() => api.requisitions.receive(b.dataset.recv, qty[b.dataset.recv]), "Stock updated");
+    if (b.dataset.dismiss) act(() => api.requisitions.dismiss(b.dataset.dismiss), "Dismissed");
+  });
+
+  await load();
+});
+  </script>
+</body>
+</html>

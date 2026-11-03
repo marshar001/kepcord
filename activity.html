@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#173B33">
+  <title>Activity — Kepcord</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="shell"><main class="pg" id="page"></main></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+boot({ id: "activity", mgmt: true }, async (me, root) => {
+  const log = await api.activity.list();
+  root.innerHTML = `
+    <h1>Activity</h1>
+    <p class="mu">Who did what, newest first. Shows the latest 150 entries.</p>
+    ${log.length === 0 ? '<p class="mu">Nothing yet.</p>' : `
+      <div class="sc"><table>
+        <thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead>
+        <tbody>${log.map((l) => `<tr><td style="white-space:nowrap">${when(l.at)}</td><td>${esc(l.byName)}</td><td>${esc(l.text)}</td></tr>`).join("")}</tbody>
+      </table></div>`}`;
+});
+  </script>
+</body>
+</html>

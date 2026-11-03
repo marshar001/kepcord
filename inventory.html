@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#173B33">
+  <title>Inventory — Kepcord</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="shell"><main class="pg" id="page"></main></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+boot({ id: "inventory" }, async (me, root) => {
+  const isM = me.role === "management";
+  let list = [], sel = "", amt = "";
+
+  async function load() { list = await api.ingredients.list(); draw(); }
+  async function run(fn, ok) {
+    try { await fn(); if (ok) toast(ok); await load(); return true; }
+    catch (e) { toast(e.message, true); return false; } // no redraw on error, so typed values stay
+  }
+
+  function draw() {
+    const chosen = list.find((i) => i.id === sel);
+    root.innerHTML = `
+      <h1>Inventory</h1>
+      <p class="mu">Stock goes down by itself when orders are recorded. Use the form below when stock arrives or after a count.</p>
+
+      <div class="panel">
+        <h2>Update stock</h2>
+        <div class="row">
+          <label>Ingredient
+            <select id="sel"><option value="">Choose…</option>
+              ${list.map((i) => `<option value="${i.id}"${i.id === sel ? " selected" : ""}>${esc(i.name)} (${num(i.qty)} ${esc(i.unit)})</option>`).join("")}
+            </select></label>
+          <label>Amount ${chosen ? "(" + esc(chosen.unit) + ")" : ""}
+            <input id="amt" type="number" inputmode="decimal" min="0" step="any" value="${esc(amt)}"></label>
+        </div>
+        <div class="row" style="margin-bottom:0">
+          <button class="pri" data-mode="received">Received (add to stock)</button>
+          <button data-mode="counted">Counted (set stock to this)</button>
+        </div>
+      </div>
+
+      ${list.length === 0 ? '<p class="mu">No ingredients yet. They appear here automatically when you add dishes on the Menu screen.</p>' : `
+        <div class="sc"><table>
+          <thead><tr><th>Ingredient</th><th>In stock</th><th>Reorder at</th>${isM ? "<th></th>" : ""}</tr></thead>
+          <tbody>${list.map((i) => {
+            const pct = i.min > 0 ? Math.min(100, (i.qty / (i.min * 3)) * 100) : i.qty > 0 ? 100 : 0;
+            return `<tr>
+              <td>${esc(i.name)}${i.qty <= 0 ? '<span class="tag">OUT</span>' : i.low ? '<span class="tag">LOW</span>' : ""}</td>
+              <td>${num(i.qty)} ${esc(i.unit)}<div class="bar${i.low ? " lo" : ""}"><i style="width:${pct}%"></i></div></td>
+              <td>${isM
+                ? `<input type="number" inputmode="decimal" min="0" step="any" value="${i.min}" data-min="${i.id}" aria-label="Reorder level for ${esc(i.name)}">`
+                : `${num(i.min)} ${esc(i.unit)}`}</td>
+              ${isM ? `<td><button class="lnk del" data-rm="${i.id}">Remove</button></td>` : ""}</tr>`;
+          }).join("")}</tbody>
+        </table></div>`}
+
+      ${isM ? `<div class="panel" style="margin-top:22px">
+        <h2>Add an ingredient by hand</h2>
+        <div class="row">
+          <label>Name<input id="nName"></label>
+          <label>Unit<select id="nUnit">${unitOptions("kg")}</select></label>
+        </div>
+        <div class="row">
+          <label>Starting stock<input id="nQty" type="number" inputmode="decimal" min="0" step="any"></label>
+          <label>Reorder level<input id="nMin" type="number" inputmode="decimal" min="0" step="any"></label>
+          <button class="pri" id="addIng">Add</button>
+        </div>
+      </div>` : ""}`;
+  }
+
+  root.addEventListener("input", (e) => {
+    if (e.target.id === "sel") { sel = e.target.value; draw(); }
+    if (e.target.id === "amt") amt = e.target.value;
+  });
+  root.addEventListener("change", (e) => {
+    const id = e.target.dataset.min;
+    if (!id) return;
+    // Saved quietly, without redrawing, so a tap on the next button isn't lost.
+    api.ingredients.setMin(id, e.target.value)
+      .then(async () => { toast("Reorder level saved"); list = await api.ingredients.list(); })
+      .catch((err) => toast(err.message, true));
+  });
+  root.addEventListener("click", async (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.dataset.mode) {
+      if (!sel) return toast("Choose an ingredient first.", true);
+      const mode = b.dataset.mode;
+      if (await run(() => api.ingredients.adjust(sel, { mode, qty: amt }), mode === "received" ? "Stock added" : "Count saved")) { amt = ""; draw(); }
+    }
+    if (b.dataset.rm) {
+      const i = list.find((x) => x.id === b.dataset.rm);
+      if (window.confirm(`Remove ${i.name}?`)) run(() => api.ingredients.remove(i.id), "Removed");
+    }
+    if (b.id === "addIng") {
+      const v = (id) => document.getElementById(id).value;
+      run(() => api.ingredients.add({ name: v("nName"), unit: v("nUnit"), qty: v("nQty"), min: v("nMin") }), "Ingredient added");
+    }
+  });
+
+  await load();
+});
+  </script>
+</body>
+</html>

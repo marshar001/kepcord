@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#173B33">
+  <title>Orders — Kepcord</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="shell"><main class="pg" id="page"></main></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+boot({ id: "orders" }, async (me, root) => {
+  const isM = me.role === "management";
+  let data = null, cart = {}, done = false, busy = false;
+
+  async function load() {
+    const [dishes, stock, today] = await Promise.all([api.dishes.list(), api.ingredients.list(), api.orders.today()]);
+    data = { dishes, stock, today };
+    draw();
+  }
+
+  // How many plates of a dish the current stock can make.
+  function maxFor(d) {
+    const have = Object.fromEntries(data.stock.map((i) => [i.id, i.qty]));
+    return Math.floor(Math.min(...d.recipe.map((r) => (have[r.ingredientId] ?? 0) / r.qty)) + 1e-9);
+  }
+
+  function draw() {
+    const { dishes, today } = data;
+    const lines = dishes.filter((d) => cart[d.id]).map((d) => ({ ...d, q: cart[d.id] }));
+    const total = lines.reduce((s, l) => s + l.q * l.price, 0);
+    const count = lines.reduce((s, l) => s + l.q, 0);
+    const live = today.filter((o) => !o.voided);
+
+    root.innerHTML = `
+      <div class="two">
+        <div>
+          <h1>Orders</h1>
+          <p class="mu">Tap a dish to add it to the order.</p>
+          ${dishes.length === 0
+            ? `<p>${isM ? "Add dishes on the Menu screen first." : "No dishes yet. Ask management to add the menu."}</p>`
+            : `<div class="dishes">${dishes.map((d) => {
+                const max = maxFor(d);
+                return `<button class="dish${cart[d.id] ? " in" : ""}" data-add="${d.id}" ${max <= 0 ? "disabled" : ""}>
+                  <b>${esc(d.name)}</b><span>${naira(d.price)}</span>
+                  <i>${max <= 0 ? "Out of stock" : cart[d.id] ? cart[d.id] + " in order" : max + " left"}</i></button>`;
+              }).join("")}</div>`}
+        </div>
+
+        <div class="side" id="slip">
+          <h2>Current order</h2>
+          ${done ? '<div class="stamp">RECORDED</div>' : ""}
+          <div class="slip">
+            <div class="t">Kepcord</div>
+            <div class="faint">${esc(me.name)}</div>
+            ${lines.length === 0 ? '<p class="faint" style="margin:10px 0 0">No dishes added yet.</p>' : ""}
+            ${lines.map((l) => `<div class="r">
+              <span class="nm">${esc(l.name)}</span><span class="d"></span>
+              <button data-dec="${l.id}" aria-label="One less ${esc(l.name)}">−</button><b>${l.q}</b>
+              <button data-inc="${l.id}" aria-label="One more ${esc(l.name)}">+</button>
+              <span style="min-width:70px;text-align:right">${naira(l.q * l.price)}</span></div>`).join("")}
+            <div class="tot"><span>Total</span><span>${naira(total)}</span></div>
+            <button class="pri" id="place" ${!lines.length || busy ? "disabled" : ""}>${busy ? "Recording…" : "Record order"}</button>
+          </div>
+        </div>
+      </div>
+
+      ${lines.length ? `<button class="float" id="view">View order · ${count} · ${naira(total)}</button>` : ""}
+
+      <h2>Today's orders</h2>
+      <p class="mu">${live.length} orders · ${naira(live.reduce((s, o) => s + o.total, 0))}</p>
+      ${today.length === 0 ? '<p class="mu">Nothing recorded yet today.</p>' : `
+        <div class="sc"><table>
+          <thead><tr><th>Time</th><th>By</th><th>Items</th><th class="n">Total</th>${isM ? "<th></th>" : ""}</tr></thead>
+          <tbody>${today.map((o) => `<tr${o.voided ? ' style="opacity:.55"' : ""}>
+            <td>${timeOnly(o.at)}</td><td>${esc(o.byName)}</td>
+            <td>${o.lines.map((l) => `${num(l.qty)} × ${esc(l.name)}`).join(", ")}${o.voided ? '<span class="tag">VOIDED</span>' : ""}</td>
+            <td class="n">${naira(o.total)}</td>
+            ${isM ? `<td>${o.voided ? "" : `<button class="lnk del" data-void="${o.id}">Void</button>`}</td>` : ""}</tr>`).join("")}</tbody>
+        </table></div>`}`;
+  }
+
+  function change(id, by) {
+    const d = data.dishes.find((x) => x.id === id);
+    const next = (cart[id] || 0) + by;
+    if (by > 0 && next > maxFor(d)) return toast(`Not enough stock for another ${d.name}.`, true);
+    done = false;
+    if (next <= 0) delete cart[id]; else cart[id] = next;
+    draw();
+  }
+
+  root.addEventListener("click", async (e) => {
+    const b = e.target.closest("button");
+    if (!b || !data) return;
+    if (b.dataset.add) return change(b.dataset.add, 1);
+    if (b.dataset.inc) return change(b.dataset.inc, 1);
+    if (b.dataset.dec) return change(b.dataset.dec, -1);
+    if (b.id === "view") return document.getElementById("slip").scrollIntoView({ behavior: "smooth" });
+    if (b.id === "place") {
+      busy = true; draw();
+      try {
+        await api.orders.place(Object.entries(cart).map(([dishId, qty]) => ({ dishId, qty })));
+        cart = {}; done = true;
+        toast("Order recorded");
+      } catch (err) { toast(err.message, true); }
+      busy = false;
+      return load();
+    }
+    if (b.dataset.void) {
+      const o = data.today.find((x) => x.id === b.dataset.void);
+      if (!window.confirm(`Void this order of ${naira(o.total)}? Its ingredients go back into stock.`)) return;
+      try { await api.orders.void(o.id); toast("Order voided"); } catch (err) { toast(err.message, true); }
+      load();
+    }
+  });
+
+  await load();
+});
+  </script>
+</body>
+</html>

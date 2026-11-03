@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#173B33">
+  <title>Settings — Kepcord</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="shell"><main class="pg" id="page"></main></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+boot({ id: "settings", mgmt: true }, async (me, root) => {
+  root.innerHTML = `
+    <h1>Settings</h1>
+    <p class="mu">Signed in as ${esc(me.name)} (${esc(me.email)}).</p>
+
+    <form class="panel" id="pwForm">
+      <h2>Change your password</h2>
+      <div class="row">
+        <label>Current password<input id="oldPw" type="password" autocomplete="current-password" required></label>
+        <label>New password (8+)<input id="newPw" type="password" autocomplete="new-password" required></label>
+        <button class="pri">Change</button>
+      </div>
+    </form>
+
+    <div class="panel">
+      <h2>Erase business data</h2>
+      <p class="mu">Deletes all orders, stock, dishes, requisitions and the activity log. Accounts stay. This cannot be undone.</p>
+      <div class="row" style="margin-bottom:0">
+        <label>Type ERASE to confirm<input id="word"></label>
+        <button class="del" id="erase" disabled>Erase everything</button>
+      </div>
+    </div>
+
+    <p class="mu">Data is currently stored in this browser only. It will move to the database in the next stage.</p>`;
+
+  const word = document.getElementById("word"), erase = document.getElementById("erase");
+  word.oninput = () => (erase.disabled = word.value !== "ERASE");
+  erase.onclick = async () => {
+    try { await api.admin.eraseAll(); toast("All business data erased"); word.value = ""; erase.disabled = true; }
+    catch (e) { toast(e.message, true); }
+  };
+  document.getElementById("pwForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api.auth.changePassword({ oldPassword: document.getElementById("oldPw").value, newPassword: document.getElementById("newPw").value });
+      toast("Password changed");
+      e.target.reset();
+    } catch (err) { toast(err.message, true); }
+  };
+});
+  </script>
+</body>
+</html>

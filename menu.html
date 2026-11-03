@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#173B33">
+  <title>Menu — Kepcord</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="shell"><main class="pg" id="page"></main></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+boot({ id: "menu", mgmt: true }, async (me, root) => {
+  const blankLine = () => ({ name: "", qty: "", unit: "kg" });
+  const blank = () => ({ id: null, name: "", price: "", lines: [blankLine()] });
+  let dishes = [], ings = [], f = blank(), busy = false;
+  const existing = (name) => ings.find((i) => i.name.toLowerCase() === name.trim().toLowerCase());
+
+  async function load() {
+    [dishes, ings] = await Promise.all([api.dishes.list(), api.ingredients.list()]);
+    draw();
+  }
+
+  function draw() {
+    root.innerHTML = `
+      <h1>Menu</h1>
+      <p class="mu">List what goes into ONE plate. New ingredients are added to Inventory automatically (starting at zero stock).</p>
+
+      <form class="panel" id="dishForm">
+        <h2>${f.id ? "Edit dish" : "Add a dish"}</h2>
+        <div class="row">
+          <label>Dish name<input id="dName" value="${esc(f.name)}" required></label>
+          <label>Price (₦)<input id="dPrice" type="number" inputmode="decimal" min="0" step="any" value="${esc(f.price)}" required></label>
+        </div>
+        <datalist id="ing-names">${ings.map((i) => `<option value="${esc(i.name)}">`).join("")}</datalist>
+        <p class="mu" style="margin-bottom:6px">Ingredients per plate</p>
+        ${f.lines.map((l, n) => {
+          const ex = existing(l.name);
+          return `<div class="ln">
+            <input list="ing-names" data-line="${n}" data-k="name" placeholder="Ingredient" aria-label="Ingredient" value="${esc(l.name)}">
+            <input type="number" inputmode="decimal" min="0" step="any" data-line="${n}" data-k="qty" placeholder="Qty" aria-label="Quantity per plate" value="${esc(l.qty)}">
+            <select data-line="${n}" data-k="unit" aria-label="Unit" ${ex ? "disabled" : ""}>${unitOptions(ex ? ex.unit : l.unit)}</select>
+            <button type="button" class="lnk del" data-rm="${n}" aria-label="Remove ingredient line" ${f.lines.length === 1 ? "disabled" : ""}>✕</button>
+          </div>`;
+        }).join("")}
+        <div class="row" style="margin-top:12px;margin-bottom:0">
+          <button type="button" id="addLine">+ Ingredient</button>
+          <button class="pri" ${busy ? "disabled" : ""}>${f.id ? "Save changes" : "Save dish"}</button>
+          ${f.id ? '<button type="button" id="cancel">Cancel</button>' : ""}
+        </div>
+      </form>
+
+      <h2>Your dishes</h2>
+      ${dishes.length === 0 ? '<p class="mu">No dishes yet.</p>' : dishes.map((d) => `
+        <div class="dishrow">
+          <div class="top"><b>${esc(d.name)}</b><span>${naira(d.price)}</span></div>
+          <p class="mu" style="margin:4px 0 8px">${d.recipe.map((r) => `${esc(r.name)} ${num(r.qty)} ${esc(r.unit)}`).join(" · ")}</p>
+          <button class="lnk" data-edit="${d.id}">Edit</button>
+          <button class="lnk del" data-del="${d.id}">Delete</button>
+        </div>`).join("")}`;
+  }
+
+  // Typing updates the form state without redrawing (so the cursor stays put).
+  root.addEventListener("input", (e) => {
+    const t = e.target;
+    if (t.id === "dName") f.name = t.value;
+    else if (t.id === "dPrice") f.price = t.value;
+    else if (t.dataset.line != null) f.lines[Number(t.dataset.line)][t.dataset.k] = t.value;
+  });
+  // When an ingredient name is finished, lock the unit box if it is a known ingredient.
+  // (Only that box is changed. Redrawing the whole form here would swallow the next tap.)
+  root.addEventListener("change", (e) => {
+    if (e.target.dataset.k !== "name") return;
+    const unit = e.target.closest(".ln").querySelector("select");
+    const ex = existing(e.target.value);
+    if (ex) { unit.value = ex.unit; unit.disabled = true; } else unit.disabled = false;
+  });
+
+  root.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    busy = true;
+    const payload = {
+      name: f.name, price: f.price,
+      recipe: f.lines.filter((l) => l.name.trim()).map((l) => ({ name: l.name, qty: l.qty, unit: existing(l.name)?.unit || l.unit })),
+    };
+    try {
+      if (f.id) await api.dishes.update(f.id, payload); else await api.dishes.add(payload);
+      toast(f.id ? "Dish updated" : "Dish added");
+      f = blank();
+    } catch (err) { toast(err.message, true); }
+    busy = false;
+    load();
+  });
+
+  root.addEventListener("click", async (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.id === "addLine") { f.lines.push(blankLine()); draw(); }
+    else if (b.id === "cancel") { f = blank(); draw(); }
+    else if (b.dataset.rm != null && b.dataset.rm !== "") { f.lines.splice(Number(b.dataset.rm), 1); draw(); }
+    else if (b.dataset.edit) {
+      const d = dishes.find((x) => x.id === b.dataset.edit);
+      f = { id: d.id, name: d.name, price: String(d.price), lines: d.recipe.map((r) => ({ name: r.name, qty: String(r.qty), unit: r.unit })) };
+      draw();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else if (b.dataset.del) {
+      const d = dishes.find((x) => x.id === b.dataset.del);
+      if (!window.confirm(`Delete ${d.name}? Past orders keep their record.`)) return;
+      try { await api.dishes.remove(d.id); toast("Dish deleted"); } catch (err) { toast(err.message, true); }
+      if (f.id === d.id) f = blank();
+      load();
+    }
+  });
+
+  await load();
+});
+  </script>
+</body>
+</html>
