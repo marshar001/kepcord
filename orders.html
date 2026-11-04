@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#173B33">
+  <meta name="theme-color" content="#1d1614">
   <title>Orders — Kepcord</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -72,7 +72,7 @@ boot({ id: "orders" }, async (me, root) => {
       ${lines.length ? `<button class="float" id="view">View order · ${count} · ${naira(total)}</button>` : ""}
 
       <h2>Today's orders</h2>
-      <p class="mu">${live.length} orders · ${naira(live.reduce((s, o) => s + o.total, 0))}</p>
+      <p class="mu">${live.length} ${live.length === 1 ? "order" : "orders"} · ${naira(live.reduce((s, o) => s + o.total, 0))}</p>
       ${today.length === 0 ? '<p class="mu">Nothing recorded yet today.</p>' : `
         <div class="sc"><table>
           <thead><tr><th>Time</th><th>By</th><th>Items</th><th class="n">Total</th>${isM ? "<th></th>" : ""}</tr></thead>

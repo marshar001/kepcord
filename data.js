@@ -370,6 +370,10 @@ const api = {
       const t = dayKey(new Date());
       return db.orders.filter((o) => dayKey(o.at) === t).sort((a, b) => b.at.localeCompare(a.at));
     }),
+    day: read((db, key) => {
+      mgmt(db);
+      return db.orders.filter((o) => dayKey(o.at) === key).sort((a, b) => b.at.localeCompare(a.at));
+    }),
     recent: read((db, limit = 10) => {
       mgmt(db);
       return [...db.orders].sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit);
@@ -419,16 +423,29 @@ const api = {
       const monthStart = new Date(); monthStart.setDate(monthStart.getDate() - 29);
       const wk = dayKey(weekStart), mo = dayKey(monthStart);
       const today = live.filter((o) => dayKey(o.at) === t);
+      const yd = new Date(); yd.setDate(yd.getDate() - 1);
+      const yesterday = live.filter((o) => dayKey(o.at) === dayKey(yd));
       const top = {};
       live.filter((o) => dayKey(o.at) >= mo).forEach((o) => o.lines.forEach((l) => { top[l.name] = (top[l.name] || 0) + l.qty; }));
       return {
         todaySales: today.reduce((s, o) => s + o.total, 0),
         todayOrders: today.length,
+        yesterdaySales: yesterday.reduce((s, o) => s + o.total, 0),
         weekSales: live.filter((o) => dayKey(o.at) >= wk).reduce((s, o) => s + o.total, 0),
         lowCount: db.ingredients.filter(isLow).length,
         openReqs: db.reqs.filter((r) => r.status === "open").length,
         top: Object.entries(top).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, qty]) => ({ name, qty })),
       };
+    }),
+    // Sales per hour (0-23) for one day, voided orders left out.
+    hours: read((db, key) => {
+      mgmt(db);
+      const out = Array.from({ length: 24 }, (_, hour) => ({ hour, value: 0, count: 0 }));
+      db.orders.filter((o) => !o.voided && dayKey(o.at) === key).forEach((o) => {
+        const h = new Date(o.at).getHours();
+        out[h].value += o.total; out[h].count += 1;
+      });
+      return out;
     }),
     salesByDay: read((db, days = 7) => {
       mgmt(db);
