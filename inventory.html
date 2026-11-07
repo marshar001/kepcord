@@ -13,97 +13,106 @@
   <script src="data.js"></script>
   <script src="app.js"></script>
   <script>
-boot({ id: "inventory" }, async (me, root) => {
-  const isM = me.role === "management";
-  let list = [], sel = "", amt = "";
+boot({ id: "inventory", mgmt: true }, async (me, root) => {
+  let key = dayKey(new Date()), sheet = null, items = [];
+  const shop = (await api.shop.info()).name;
+  const N = (v) => Number(v || 0).toLocaleString("en-NG", { maximumFractionDigits: 2 });
+  const cell = (v, cls) => `<td class="${cls || ""}">${v}</td>`;
 
-  async function load() { list = await api.ingredients.list(); draw(); }
-  async function run(fn, ok) {
-    try { await fn(); if (ok) toast(ok); await load(); return true; }
-    catch (e) { toast(e.message, true); return false; } // no redraw on error, so typed values stay
+  async function load() {
+    try { [sheet, items] = await Promise.all([api.stock.sheet(key), api.ingredients.list()]); } catch (e) { return toast(e.message, true); }
+    draw();
   }
 
   function draw() {
-    const chosen = list.find((i) => i.id === sel);
+    const t = sheet.totals || { openValue: 0, cogs: 0, closeValue: 0, profit: 0 };
+    const rows = sheet.rows;
     root.innerHTML = `
       <h1>Inventory</h1>
-      <p class="mu">Stock goes down by itself when orders are recorded. Use the form below when stock arrives or after a count.</p>
+      <p class="mu">The kitchen inventory sheet for any day. Management only.</p>
+      ${dateBarHTML(key)}
+      <div class="actions noprint"><button type="button" id="print">Print this sheet</button></div>
+      <section class="sheet">
+        <h2 class="sheet-title">Kitchen inventory for ${esc(longDate(key))} — ${esc(shop)}</h2>
+        <div class="sc"><table class="kt">
+          <thead><tr><th class="item">Item</th><th>Open stock</th><th>Added stock</th><th>Total stock</th><th>Sold stock</th><th>Comp</th><th>Closing stock</th><th>Unit price</th><th>Selling price</th><th>Open stock value</th><th>Cost of goods used</th><th>Closing stock value</th><th>Profit</th></tr></thead>
+          <tbody>${rows.length === 0 ? '<tr><td class="item" colspan="13">No items on this day.</td></tr>' : rows.map((r) => `<tr>
+            <td class="item">${esc(r.name)}<small>${esc(r.unit)}</small></td>
+            ${cell(qtyText(r.open))}${cell(qtyText(r.added))}${cell(qtyText(r.total))}${cell(qtyText(r.sold))}${cell(qtyText(r.comp))}${cell(qtyText(r.closing), r.low ? "low" : "")}
+            <td><input type="number" inputmode="decimal" step="any" min="0" value="${r.price}" data-f="price" data-id="${r.id}" aria-label="Unit price of ${esc(r.name)}"></td>
+            <td><input type="number" inputmode="decimal" step="any" min="0" value="${r.sell}" data-f="sell" data-id="${r.id}" aria-label="Selling price of ${esc(r.name)}"></td>
+            ${cell(N(r.openValue))}${cell(N(r.cogs))}${cell(N(r.closeValue))}${cell(r.profit === null ? "—" : N(r.profit), r.profit < 0 ? "neg" : "")}</tr>`).join("")}</tbody>
+          <tfoot><tr><td class="item">Total</td><td colspan="8"></td><td>${N(t.openValue)}</td><td>${N(t.cogs)}</td><td>${N(t.closeValue)}</td><td class="${t.profit < 0 ? "neg" : ""}">${N(t.profit)}</td></tr></tfoot>
+        </table></div>
+        <table class="sumbox">
+          <tr><td>Opening stock</td><td>${naira(t.openValue)}</td></tr>
+          <tr><td>Closing stock</td><td>${naira(t.closeValue)}</td></tr>
+          <tr><td>Cost of goods used</td><td>${naira(t.cogs)}</td></tr>
+          <tr><td>Profit</td><td>${naira(t.profit)}</td></tr>
+        </table>
+        <p class="fine">Cost of goods used = (sold + comp) × unit price. Profit = sold × selling price − cost of goods used (blank where there is no selling price). Price changes apply to every day.</p>
+      </section>
 
-      <div class="panel">
-        <h2>Update stock</h2>
-        <div class="row">
-          <label>Ingredient
-            <select id="sel"><option value="">Choose…</option>
-              ${list.map((i) => `<option value="${i.id}"${i.id === sel ? " selected" : ""}>${esc(i.name)} (${num(i.qty)} ${esc(i.unit)})</option>`).join("")}
-            </select></label>
-          <label>Amount ${chosen ? "(" + esc(chosen.unit) + ")" : ""}
-            <input id="amt" type="number" inputmode="decimal" min="0" step="any" value="${esc(amt)}"></label>
-        </div>
-        <div class="row" style="margin-bottom:0">
-          <button class="pri" data-mode="received">Received (add to stock)</button>
-          <button data-mode="counted">Counted (set stock to this)</button>
-        </div>
-      </div>
-
-      ${list.length === 0 ? '<p class="mu">No ingredients yet. They appear here automatically when you add dishes on the Menu screen.</p>' : `
-        <div class="sc"><table>
-          <thead><tr><th>Ingredient</th><th>In stock</th><th>Reorder at</th>${isM ? "<th></th>" : ""}</tr></thead>
-          <tbody>${list.map((i) => {
-            const pct = i.min > 0 ? Math.min(100, (i.qty / (i.min * 3)) * 100) : i.qty > 0 ? 100 : 0;
-            return `<tr>
-              <td>${esc(i.name)}${i.qty <= 0 ? '<span class="tag">OUT</span>' : i.low ? '<span class="tag">LOW</span>' : ""}</td>
-              <td>${num(i.qty)} ${esc(i.unit)}<div class="bar${i.low ? " lo" : ""}"><i style="width:${pct}%"></i></div></td>
-              <td>${isM
-                ? `<input type="number" inputmode="decimal" min="0" step="any" value="${i.min}" data-min="${i.id}" aria-label="Reorder level for ${esc(i.name)}">`
-                : `${num(i.min)} ${esc(i.unit)}`}</td>
-              ${isM ? `<td><button class="lnk del" data-rm="${i.id}">Remove</button></td>` : ""}</tr>`;
-          }).join("")}</tbody>
-        </table></div>`}
-
-      ${isM ? `<div class="panel" style="margin-top:22px">
-        <h2>Add an ingredient by hand</h2>
-        <div class="row">
-          <label>Name<input id="nName"></label>
-          <label>Unit<select id="nUnit">${unitOptions("kg")}</select></label>
-        </div>
-        <div class="row">
-          <label>Starting stock<input id="nQty" type="number" inputmode="decimal" min="0" step="any"></label>
-          <label>Reorder level<input id="nMin" type="number" inputmode="decimal" min="0" step="any"></label>
-          <button class="pri" id="addIng">Add</button>
-        </div>
-      </div>` : ""}`;
+      <section class="noprint">
+        <h2>Manage items</h2>
+        ${items.length === 0 ? '<p class="mu">No items yet.</p>' : `<div class="sc"><table><thead><tr><th>Item</th><th class="n">Reorder at</th><th></th></tr></thead><tbody>
+          ${items.map((i) => `<tr><td>${esc(i.name)} <span class="mu">(${esc(i.unit)})</span></td>
+            <td class="n"><input type="number" inputmode="decimal" step="any" min="0" value="${i.min}" data-min="${i.id}" style="width:90px" aria-label="Reorder level of ${esc(i.name)}"></td>
+            <td><button class="lnk del" data-rm="${i.id}">Remove</button></td></tr>`).join("")}</tbody></table></div>`}
+        <h3>Add an item</h3>
+        <form id="addf" class="stack">
+          <label>Name<input name="name" required maxlength="60"></label>
+          <label>Unit<select name="unit">${unitOptions("kg")}</select></label>
+          <label>Starting quantity<input name="qty" type="number" inputmode="decimal" step="any" min="0" value="0"></label>
+          <label>Reorder at<input name="min" type="number" inputmode="decimal" step="any" min="0" value="0"></label>
+          <label>Unit price (₦)<input name="price" type="number" inputmode="decimal" step="any" min="0" value="0"></label>
+          <label>Selling price (₦)<input name="sell" type="number" inputmode="decimal" step="any" min="0" value="0"></label>
+          <button class="pri">Add item</button>
+        </form>
+      </section>`;
+    wireDateBar(root, key, (k) => { key = k; load(); });
   }
 
-  root.addEventListener("input", (e) => {
-    if (e.target.id === "sel") { sel = e.target.value; draw(); }
-    if (e.target.id === "amt") amt = e.target.value;
-  });
-  root.addEventListener("change", (e) => {
-    const id = e.target.dataset.min;
-    if (!id) return;
-    // Saved quietly, without redrawing, so a tap on the next button isn't lost.
-    api.ingredients.setMin(id, e.target.value)
-      .then(async () => { toast("Reorder level saved"); list = await api.ingredients.list(); })
-      .catch((err) => toast(err.message, true));
-  });
   root.addEventListener("click", async (e) => {
-    const b = e.target.closest("button");
-    if (!b) return;
-    if (b.dataset.mode) {
-      if (!sel) return toast("Choose an ingredient first.", true);
-      const mode = b.dataset.mode;
-      if (await run(() => api.ingredients.adjust(sel, { mode, qty: amt }), mode === "received" ? "Stock added" : "Count saved")) { amt = ""; draw(); }
-    }
-    if (b.dataset.rm) {
-      const i = list.find((x) => x.id === b.dataset.rm);
-      if (window.confirm(`Remove ${i.name}?`)) run(() => api.ingredients.remove(i.id), "Removed");
-    }
-    if (b.id === "addIng") {
-      const v = (id) => document.getElementById(id).value;
-      run(() => api.ingredients.add({ name: v("nName"), unit: v("nUnit"), qty: v("nQty"), min: v("nMin") }), "Ingredient added");
-    }
+    if (e.target.id === "print") return window.print();
+    const id = e.target.dataset && e.target.dataset.rm;
+    if (!id) return;
+    const i = items.find((x) => x.id === id);
+    if (!window.confirm(`Remove ${i.name}?`)) return;
+    try { await api.ingredients.remove(id); toast("Removed"); } catch (err) { toast(err.message, true); }
+    load();
   });
-
+  root.addEventListener("change", async (e) => {
+    const t = e.target;
+    try {
+      if (t.dataset.f) {
+        const tr = t.closest("tr");
+        const get = (f) => tr.querySelector(`[data-f=${f}]`).value;
+        await api.ingredients.setPrices(t.dataset.id, { price: Number(get("price")), sell: Number(get("sell")) });
+        toast("Price saved");
+        sheet = await api.stock.sheet(key);
+        const x = sheet.rows.find((r) => r.id === t.dataset.id), tds = tr.children;
+        [9, 10, 11, 12].forEach((n, j) => (tds[n].textContent = j === 3 && x.profit === null ? "—" : N([x.openValue, x.cogs, x.closeValue, x.profit][j])));
+        const f = root.querySelector(".kt tfoot").children[0].children, tt = sheet.totals;
+        [tt.openValue, tt.cogs, tt.closeValue, tt.profit].forEach((v, j) => (f[2 + j].textContent = N(v)));
+        const sb = root.querySelectorAll(".sumbox td:last-child");
+        [tt.openValue, tt.closeValue, tt.cogs, tt.profit].forEach((v, j) => (sb[j].textContent = naira(v)));
+      } else if (t.dataset.min) {
+        await api.ingredients.setMin(t.dataset.min, t.value);
+        toast("Reorder level saved");
+      }
+    } catch (err) { toast(err.message, true); load(); }
+  });
+  root.addEventListener("submit", async (e) => {
+    if (e.target.id !== "addf") return;
+    e.preventDefault();
+    const f = e.target, v = (n) => f[n].value;
+    try {
+      await api.ingredients.add({ name: v("name"), unit: v("unit"), qty: v("qty"), min: v("min"), price: v("price"), sell: v("sell") });
+      toast("Item added");
+    } catch (err) { toast(err.message, true); }
+    load();
+  });
   await load();
 });
   </script>

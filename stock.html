@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1d1614">
+  <title>Stock — Kepcord</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="shell"><main class="pg" id="page"></main></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+boot({ id: "stock" }, async (me, root) => {
+  let key = dayKey(new Date()), sheet = null, sel = null;
+  const todayKey = key;
+
+  async function load() {
+    try { sheet = await api.stock.sheet(key); } catch (e) { return toast(e.message, true); }
+    draw();
+  }
+
+  function draw() {
+    const hasComp = sheet.rows.some((r) => r.comp > 0);
+    root.innerHTML = `
+      <h1>Stock</h1>
+      <p class="mu">${sheet.isToday ? "Tap an item to record stock received, a count, or a complimentary item." : "Past days are read-only."}</p>
+      ${dateBarHTML(key)}
+      <div class="nb">
+        <div class="nbhead"><span>${dmy(key)}</span><span>Items</span></div>
+        ${sheet.rows.length === 0 ? '<p class="nbempty">No items on this day.</p>' : `
+        <div class="sc"><table class="nbt">
+          <thead><tr><th style="text-align:left;padding-left:6px">Items</th><th>Opening Stock</th><th>Added Stock</th><th>Total Stock</th><th>Items sold</th>${hasComp ? "<th>Comp</th>" : ""}<th>Closing Stock</th></tr></thead>
+          <tbody>${sheet.rows.map((r) => `<tr class="nbrow" data-id="${r.id}">
+            <td class="nm"><button class="nmbtn" type="button" data-id="${r.id}">${esc(r.name)}</button></td>
+            <td>${qtyText(r.open)}</td><td>${r.added ? qtyText(r.added) : ""}</td><td>${qtyText(r.total)}</td>
+            <td>${r.sold ? qtyText(r.sold) : ""}</td>${hasComp ? `<td>${r.comp ? qtyText(r.comp) : ""}</td>` : ""}
+            <td class="${r.low ? "lowc" : ""}">${qtyText(r.closing)}</td></tr>`).join("")}</tbody>
+        </table></div>`}
+      </div>
+      <p class="fine" style="font-family:inherit;color:var(--mu)">Red closing stock means at or below the reorder level.</p>
+      <dialog id="dlg"></dialog>`;
+    wireDateBar(root, key, (k) => { key = k; load(); });
+  }
+
+  function openDlg(id) {
+    const r = sheet.rows.find((x) => x.id === id);
+    if (!r || !sheet.isToday) return;
+    const d = root.querySelector("#dlg");
+    d.innerHTML = `<div class="dlg">
+      <h2>${esc(r.name)}</h2>
+      <p class="mu">In stock now: <b>${qtyText(r.closing)} ${esc(r.unit)}</b></p>
+      <form class="dform" data-mode="received"><label>Stock received (${esc(r.unit)})<input name="q" type="number" inputmode="decimal" step="any" min="0" required></label><button class="pri">Add</button></form>
+      <form class="dform" data-mode="counted"><label>Count now (${esc(r.unit)})<input name="q" type="number" inputmode="decimal" step="any" min="0" required></label><button>Save</button></form>
+      <form class="dform" data-mode="comp"><label>Given free / complimentary (${esc(r.unit)})<input name="q" type="number" inputmode="decimal" step="any" min="0" required></label><button>Record</button></form>
+      <p style="margin:16px 0 0"><button type="button" id="dlgx">Close</button></p></div>`;
+    d.querySelector("#dlgx").onclick = () => d.close();
+    d.querySelectorAll("form").forEach((f) => (f.onsubmit = async (e) => {
+      e.preventDefault();
+      const q = Number(f.q.value);
+      try {
+        await api.ingredients.adjust(id, { mode: f.dataset.mode, qty: q });
+        d.close();
+        toast(f.dataset.mode === "received" ? "Stock added" : f.dataset.mode === "comp" ? "Complimentary recorded" : "Count saved");
+        load();
+      } catch (err) { toast(err.message, true); }
+    }));
+    d.showModal();
+  }
+
+  root.addEventListener("click", (e) => {
+    const b = e.target.closest(".nmbtn, tr.nbrow");
+    if (b) openDlg(b.dataset.id);
+  });
+  await load();
+});
+  </script>
+</body>
+</html>

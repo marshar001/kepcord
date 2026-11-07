@@ -7,6 +7,44 @@ const naira = (n) => "₦" + Number(n || 0).toLocaleString("en-NG", { maximumFra
 const when = (iso) => new Date(iso).toLocaleString("en-NG", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 const timeOnly = (iso) => new Date(iso).toLocaleTimeString("en-NG", { hour: "numeric", minute: "2-digit" });
 const num = (n) => String(Math.round(Number(n) * 1000) / 1000);
+// Dates are handled as local "YYYY-MM-DD" keys.
+const dayKey = (d) => {
+  const x = new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+};
+const dmy = (key) => { const [y, m, d] = key.split("-"); return `${Number(d)}/${Number(m)}/${y}`; };
+const longDate = (key) => new Date(key + "T12:00:00").toLocaleDateString("en-NG", { day: "numeric", month: "long", year: "numeric" });
+const shiftDay = (key, n) => { const d = new Date(key + "T12:00:00"); d.setDate(d.getDate() + n); return dayKey(d); };
+
+// Quantities the way they are written in the stock book: 8½, 21½, ¼.
+function qtyText(n) {
+  n = Math.round(Number(n) * 1000) / 1000;
+  const a = Math.abs(n), whole = Math.floor(a + 1e-9), f = Math.round((a - whole) * 1000) / 1000;
+  const frac = { 0.25: "¼", 0.5: "½", 0.75: "¾" }[f];
+  const t = f === 0 ? String(whole) : frac ? (whole ? String(whole) : "") + frac : String(a);
+  return (n < 0 ? "−" : "") + t;
+}
+
+// Previous day / date box / next day, shared by the stock book and the inventory sheet.
+function dateBarHTML(key) {
+  const today = dayKey(new Date());
+  return `<div class="datebar noprint">
+    <button type="button" id="dPrev" aria-label="Previous day">‹</button>
+    <input type="date" id="dPick" value="${key}" max="${today}" aria-label="Choose a day">
+    <button type="button" id="dNext" aria-label="Next day" ${key >= today ? "disabled" : ""}>›</button>
+    ${key !== today ? '<button type="button" id="dToday">Today</button>' : ""}
+  </div>`;
+}
+function wireDateBar(root, key, onPick) {
+  const today = dayKey(new Date());
+  const go = (k) => { if (/^\d{4}-\d{2}-\d{2}$/.test(k) && k <= today) onPick(k); };
+  root.querySelector("#dPrev").onclick = () => go(shiftDay(key, -1));
+  root.querySelector("#dNext").onclick = () => go(shiftDay(key, 1));
+  root.querySelector("#dPick").onchange = (e) => go(e.target.value);
+  const t = root.querySelector("#dToday");
+  if (t) t.onclick = () => go(today);
+}
+
 const UNITS = ["kg", "g", "L", "ml", "pcs", "packs", "bottles", "tins", "cups"];
 const unitOptions = (sel) => UNITS.map((u) => `<option${u === sel ? " selected" : ""}>${u}</option>`).join("");
 
@@ -24,6 +62,7 @@ const ICONS = {
   dashboard: '<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
   orders: '<path d="M6 3.5h12A1.5 1.5 0 0 1 19.5 5v14a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 19V5A1.5 1.5 0 0 1 6 3.5Z"/><path d="M8 8h8M8 12h8M8 16h5"/>',
   inventory: '<path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+  stock: '<path d="M5 3.5h12.5A1.5 1.5 0 0 1 19 5v15H6.5A1.5 1.5 0 0 1 5 18.5v-15Z"/><path d="M5 18.5A1.5 1.5 0 0 0 6.5 20H19M9 8h6M9 12h6"/>',
   menu: '<path d="M6 3v7a2 2 0 0 0 2 2v9M10 3v7M6 7h4"/><path d="M17 3c-2 1.5-3 4-3 7 0 1.5 1 2.5 3 2.5V21"/>',
   requisitions: '<path d="M9 5H6.5A1.5 1.5 0 0 0 5 6.5v13A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-13A1.5 1.5 0 0 0 17.5 5H15"/><rect x="9" y="3" width="6" height="4" rx="1.5"/><path d="m9 14 2 2 4-4"/>',
   employees: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/>',
@@ -36,7 +75,8 @@ const icon = (name, size) =>
 const SCREENS = [
   { id: "dashboard", label: "Dashboard", mgmt: true },
   { id: "orders", label: "Orders" },
-  { id: "inventory", label: "Inventory" },
+  { id: "stock", label: "Stock" },
+  { id: "inventory", label: "Inventory", mgmt: true },
   { id: "menu", label: "Menu", mgmt: true },
   { id: "requisitions", label: "Requisitions" },
   { id: "employees", label: "Employees", mgmt: true },

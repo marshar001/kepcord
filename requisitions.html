@@ -15,54 +15,102 @@
   <script>
 boot({ id: "requisitions" }, async (me, root) => {
   const isM = me.role === "management";
-  let open = [], closed = [];
-  const qty = {};
+  let reqs = [], names = [], recv = {};
+  const shop = (await api.shop.info()).name;
+  const N = (v) => Number(v || 0).toLocaleString("en-NG", { maximumFractionDigits: 2 });
 
   async function load() {
-    [open, closed] = await Promise.all([api.requisitions.open(), api.requisitions.closed()]);
+    [reqs, names] = await Promise.all([api.requisitions.open(), api.ingredients.list()]);
     draw();
   }
+  const grand = () => reqs.reduce((s, r) => s + r.qty * (r.price || 0), 0);
 
   function draw() {
+    const blanks = Math.max(0, 22 - reqs.length);
     root.innerHTML = `
       <h1>Requisitions</h1>
-      <p class="mu">Raised automatically when an ingredient reaches its reorder level or runs out. When the goods arrive, mark it received and the stock goes up.</p>
+      <p class="mu">Items to buy. Low stock adds lines here by itself; anyone can add a line.</p>
+      <div class="actions noprint"><button type="button" id="print">Print form</button></div>
+      <section class="paper">
+        <div class="co">${esc(shop)}</div>
+        <div class="ttl">Purchase requisition form</div>
+        <p class="dt">Date: <span>${dmy(dayKey(new Date()))}</span></p>
+        <div class="sc"><table class="pf">
+          <colgroup><col style="width:36%"><col style="width:16%"><col style="width:24%"><col style="width:24%"></colgroup>
+          <thead><tr><th>Description</th><th class="n">Qty</th><th class="n">Unit price</th><th class="n">Total</th></tr></thead>
+          <tbody>${reqs.map((r) => `<tr>
+            <td class="nm">${esc(r.name)}<small>${esc(r.unit)}${r.reason ? " · " + esc(r.reason) : ""}</small></td>
+            <td class="n"><input type="number" inputmode="decimal" step="any" min="0" value="${r.qty}" data-q="${r.id}" aria-label="Quantity of ${esc(r.name)}"></td>
+            <td class="n"><input type="number" inputmode="decimal" step="any" min="0" value="${r.price || 0}" data-p="${r.id}" aria-label="Unit price of ${esc(r.name)}"></td>
+            <td class="n" data-t="${r.id}">${N(r.qty * (r.price || 0))}</td></tr>`).join("")}
+            ${Array.from({ length: blanks }, () => '<tr class="blank"><td></td><td></td><td></td><td></td></tr>').join("")}</tbody>
+          <tfoot><tr><td colspan="3" class="n">Total</td><td class="n" id="grand">${naira(grand())}</td></tr></tfoot>
+        </table></div>
+        ${reqs.length === 0 ? '<p class="fine">Nothing on the form yet. Add a line below.</p>' : ""}
+        <p class="by">Ordered by: <span>${esc(me.name)}</span></p>
+      </section>
 
-      ${open.length === 0 ? "<p>Nothing to reorder right now.</p>" : `
-        <div class="sc"><table>
-          <thead><tr><th>Ingredient</th><th>Needed</th><th>Received</th><th></th></tr></thead>
-          <tbody>${open.map((r) => `<tr>
-            <td>${esc(r.name)}<div class="mu">${esc(r.reason)} · ${when(r.at)}</div></td>
-            <td class="n">${num(r.qty)} ${esc(r.unit)}</td>
-            <td><input type="number" inputmode="decimal" min="0" step="any" data-q="${r.id}" aria-label="Quantity received for ${esc(r.name)}" value="${qty[r.id] ?? r.qty}"></td>
-            <td><button class="pri" data-recv="${r.id}">Mark received</button>
-                ${isM ? `<button class="lnk del" data-dismiss="${r.id}">Dismiss</button>` : ""}</td></tr>`).join("")}</tbody>
-        </table></div>`}
+      <section class="noprint">
+        <h2>Add a line</h2>
+        <form id="addf" class="stack">
+          <label>Description<input name="name" list="itemlist" required maxlength="80" autocomplete="off"></label>
+          <datalist id="itemlist">${names.map((n) => `<option value="${esc(n.name)}">`).join("")}</datalist>
+          <label>Quantity<input name="qty" type="number" inputmode="decimal" step="any" min="0" required></label>
+          <label>Unit<select name="unit">${unitOptions("pcs")}</select></label>
+          <label>Unit price (₦)<input name="price" type="number" inputmode="decimal" step="any" min="0" value="0"></label>
+          <button class="pri">Add to form</button>
+        </form>
+        <p class="mu">If the description matches a stock item, its own unit is used and received goods are added to its stock.</p>
 
-      <h2>History</h2>
-      ${closed.length === 0 ? '<p class="mu">Nothing yet.</p>' : `
-        <div class="sc"><table>
-          <thead><tr><th>Ingredient</th><th>Result</th><th>Closed</th></tr></thead>
-          <tbody>${closed.map((r) => `<tr>
-            <td>${esc(r.name)}</td>
-            <td>${r.status === "received" ? `Received ${num(r.receivedQty)} ${esc(r.unit)}` : "Dismissed"}</td>
-            <td>${when(r.closedAt)} · ${esc(r.closedBy || "")}</td></tr>`).join("")}</tbody>
-        </table></div>`}`;
+        <h2>When goods arrive</h2>
+        ${reqs.length === 0 ? '<p class="mu">Nothing waiting.</p>' : reqs.map((r) => `<div class="arr">
+          <span class="it"><b>${esc(r.name)}</b> · ordered ${qtyText(r.qty)} ${esc(r.unit)}</span>
+          <input type="number" inputmode="decimal" step="any" min="0" value="${recv[r.id] ?? r.qty}" data-r="${r.id}" aria-label="Quantity received of ${esc(r.name)}">
+          <span><button class="pri" data-recv="${r.id}">Received</button>${isM ? ` <button class="lnk del" data-dis="${r.id}">Dismiss</button>` : ""}</span></div>`).join("")}
+      </section>`;
   }
 
-  async function act(fn, ok) {
-    try { await fn(); toast(ok); } catch (e) { toast(e.message, true); }
-    load();
-  }
-
-  root.addEventListener("input", (e) => { if (e.target.dataset.q) qty[e.target.dataset.q] = e.target.value; });
-  root.addEventListener("click", (e) => {
+  root.addEventListener("click", async (e) => {
     const b = e.target.closest("button");
     if (!b) return;
-    if (b.dataset.recv) act(() => api.requisitions.receive(b.dataset.recv, qty[b.dataset.recv]), "Stock updated");
-    if (b.dataset.dismiss) act(() => api.requisitions.dismiss(b.dataset.dismiss), "Dismissed");
+    if (b.id === "print") return window.print();
+    try {
+      if (b.dataset.recv) {
+        const q = Number(root.querySelector(`[data-r="${b.dataset.recv}"]`).value);
+        await api.requisitions.receive(b.dataset.recv, q);
+        toast("Received");
+      } else if (b.dataset.dis) {
+        if (!window.confirm("Remove this line from the form?")) return;
+        await api.requisitions.dismiss(b.dataset.dis);
+        toast("Removed");
+      } else return;
+    } catch (err) { toast(err.message, true); }
+    load();
   });
-
+  root.addEventListener("input", (e) => { if (e.target.dataset.r) recv[e.target.dataset.r] = e.target.value; });
+  root.addEventListener("change", async (e) => {
+    const t = e.target, id = t.dataset.q || t.dataset.p;
+    if (!id) return;
+    const tr = t.closest("tr");
+    const q = Number(tr.querySelector("[data-q]").value), p = Number(tr.querySelector("[data-p]").value);
+    try {
+      await api.requisitions.update(id, { qty: q, price: p });
+      const r = reqs.find((x) => x.id === id); r.qty = q; r.price = p;
+      tr.querySelector("[data-t]").textContent = N(q * p);
+      root.querySelector("#grand").textContent = naira(grand());
+      toast("Saved");
+    } catch (err) { toast(err.message, true); load(); }
+  });
+  root.addEventListener("submit", async (e) => {
+    if (e.target.id !== "addf") return;
+    e.preventDefault();
+    const f = e.target;
+    try {
+      await api.requisitions.add({ name: f.name.value, qty: Number(f.qty.value), unit: f.unit.value, price: Number(f.price.value) });
+      toast("Line added");
+    } catch (err) { toast(err.message, true); }
+    load();
+  });
   await load();
 });
   </script>

@@ -84,7 +84,7 @@ function ensureIngredient(db, name, unit) {
   const n = String(name).trim();
   const ex = db.ingredients.find((i) => i.name.toLowerCase() === n.toLowerCase());
   if (ex) return ex;
-  const i = { id: uid(), name: n, unit: unit || "pcs", qty: 0, min: 0 };
+  const i = { id: uid(), name: n, unit: unit || "pcs", qty: 0, min: 0, price: 0, sell: 0, createdAt: now() };
   db.ingredients.push(i);
   return i;
 }
@@ -96,7 +96,7 @@ function checkReorder(db, ing) {
   if (db.reqs.some((r) => r.ingredientId === ing.id && r.status === "open")) return;
   db.reqs.push({
     id: uid(), ingredientId: ing.id, name: ing.name, unit: ing.unit,
-    qty: r3(Math.max(ing.min * 2 - ing.qty, 1)),
+    qty: r3(Math.max(ing.min * 2 - ing.qty, 1)), price: ing.price || 0,
     reason: ing.qty <= 0 ? "Ran out" : "Reached reorder level",
     status: "open", at: now(),
   });
@@ -228,21 +228,24 @@ const api = {
   },
 
   ingredients: {
+    // Cost and selling prices are for management only. Employees get quantities.
     list: read((db) => {
-      me(db);
+      const isM = me(db).role === "management";
       return [...db.ingredients]
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map((i) => ({ ...i, low: isLow(i) }));
+        .map((i) => isM
+          ? { ...i, price: i.price || 0, sell: i.sell || 0, low: isLow(i) }
+          : { id: i.id, name: i.name, unit: i.unit, qty: i.qty, min: i.min, low: isLow(i) });
     }),
-    add: tx((db, { name, unit, qty, min }) => {
+    add: tx((db, { name, unit, qty, min, price, sell }) => {
       const m = mgmt(db);
       const n = String(name || "").trim();
       if (!n) throw new Error("Enter the ingredient name.");
       if (db.ingredients.some((i) => i.name.toLowerCase() === n.toLowerCase()))
         throw new Error(`${n} is already in inventory.`);
-      const q = Number(qty || 0), mn = Number(min || 0);
-      if (q < 0 || mn < 0) throw new Error("Amounts can't be negative.");
-      const i = { id: uid(), name: n, unit: unit || "pcs", qty: q, min: mn };
+      const q = Number(qty || 0), mn = Number(min || 0), pr = Number(price || 0), sl = Number(sell || 0);
+      if (q < 0 || mn < 0 || pr < 0 || sl < 0) throw new Error("Amounts can't be negative.");
+      const i = { id: uid(), name: n, unit: unit || "pcs", qty: q, min: mn, price: pr, sell: sl, createdAt: now() };
       db.ingredients.push(i);
       addLog(db, m, `Added ingredient ${n}`);
       checkReorder(db, i);
@@ -260,14 +263,28 @@ const api = {
       } else if (mode === "counted") {
         if (q < 0) throw new Error("A count can't be negative.");
         delta = r3(q - i.qty);
+      } else if (mode === "comp") {
+        if (!(q > 0)) throw new Error("Enter how much was given free.");
+        if (q > i.qty + 1e-9) throw new Error(`Only ${show(i.qty)} ${i.unit} of ${i.name} left.`);
+        delta = -q;
       } else throw new Error("Unknown stock action.");
       i.qty = r3(i.qty + delta);
-      const reason = mode === "received" ? "Received" : "Counted";
+      const reason = mode === "received" ? "Received" : mode === "comp" ? "Complimentary" : "Counted";
       db.moves.push({ id: uid(), at: now(), ingredientId: i.id, name: i.name, delta, reason, byName: u.name });
       addLog(db, u, mode === "received"
         ? `Received ${show(q)} ${i.unit} of ${i.name}`
+        : mode === "comp"
+        ? `Gave ${show(q)} ${i.unit} of ${i.name} free (complimentary)`
         : `Counted ${i.name}: ${show(q)} ${i.unit} (was ${show(i.qty - delta)})`);
       checkReorder(db, i);
+    }),
+    setPrices: tx((db, id, { price, sell }) => {
+      const m = mgmt(db);
+      const i = findIng(db, id);
+      const p = Number(price || 0), sl = Number(sell || 0);
+      if (!(p >= 0) || !(sl >= 0)) throw new Error("Prices can't be negative.");
+      i.price = p; i.sell = sl;
+      addLog(db, m, `Set prices for ${i.name}: cost ₦${p.toLocaleString("en-NG")}, selling ₦${sl.toLocaleString("en-NG")} per ${i.unit}`);
     }),
     setMin: tx((db, id, min) => {
       const m = mgmt(db);
@@ -381,7 +398,34 @@ const api = {
   },
 
   requisitions: {
-    open: read((db) => { me(db); return db.reqs.filter((r) => r.status === "open").sort((a, b) => b.at.localeCompare(a.at)); }),
+    // Open lines of the purchase requisition form, oldest first (like writing down a list).
+    open: read((db) => { me(db); return db.reqs.filter((r) => r.status === "open").sort((a, b) => a.at.localeCompare(b.at)).map((r) => ({ ...r, price: r.price || 0 })); }),
+    add: tx((db, { name, qty, unit, price }) => {
+      const u = me(db);
+      const n = String(name || "").trim();
+      if (!n) throw new Error("Enter what needs to be bought.");
+      const q = Number(qty);
+      if (!(q > 0)) throw new Error("Enter how many to buy.");
+      const p = price === "" || price == null ? null : Number(price);
+      if (p != null && !(p >= 0)) throw new Error("Price can't be negative.");
+      const ing = db.ingredients.find((i) => i.name.toLowerCase() === n.toLowerCase());
+      db.reqs.push({
+        id: uid(), ingredientId: ing ? ing.id : null, name: ing ? ing.name : n, unit: ing ? ing.unit : unit || "pcs",
+        qty: r3(q), price: p != null ? p : ing ? ing.price || 0 : 0,
+        reason: "Added by " + u.name, status: "open", at: now(),
+      });
+      addLog(db, u, `Added ${show(q)} ${ing ? ing.unit : unit || "pcs"} of ${ing ? ing.name : n} to the requisition form`);
+    }),
+    update: tx((db, id, { qty, price }) => {
+      const u = me(db);
+      const r = db.reqs.find((x) => x.id === id);
+      if (!r || r.status !== "open") throw new Error("This line is already closed.");
+      const q = Number(qty), p = Number(price || 0);
+      if (!(q > 0)) throw new Error("Quantity must be more than zero.");
+      if (!(p >= 0)) throw new Error("Price can't be negative.");
+      r.qty = r3(q); r.price = p;
+      addLog(db, u, `Changed requisition line for ${r.name}: ${show(q)} ${r.unit} at ₦${p.toLocaleString("en-NG")}`);
+    }),
     closed: read((db) => {
       me(db);
       return db.reqs.filter((r) => r.status !== "open")
@@ -407,6 +451,58 @@ const api = {
       if (!r || r.status !== "open") throw new Error("This requisition is already closed.");
       r.status = "dismissed"; r.closedAt = now(); r.closedBy = m.name;
       addLog(db, m, `Dismissed requisition for ${r.name}`);
+    }),
+  },
+
+  // One day of the stock book: opening, added, total, sold, comp, closing for every item.
+  // Everything is worked out from the stock movements, so it can never disagree with the real stock.
+  stock: {
+    sheet: read((db, key) => {
+      const isM = me(db).role === "management";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(key))) throw new Error("Choose a valid date.");
+      const start = new Date(key + "T00:00:00"), end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      const rows = [];
+      for (const i of [...db.ingredients].sort((a, b) => a.name.localeCompare(b.name))) {
+        if (i.createdAt && new Date(i.createdAt) >= end) continue; // did not exist yet
+        let after = 0, added = 0, sold = 0, comp = 0, during = 0;
+        for (const m of db.moves) {
+          if (m.ingredientId !== i.id) continue;
+          const t = new Date(m.at);
+          if (t >= start) after += m.delta;
+          if (t < start || t >= end) continue;
+          during += m.delta;
+          if (m.reason === "Complimentary") comp -= m.delta;
+          else if (m.reason === "Order" || m.reason === "Order voided") sold -= m.delta;
+          else if (m.delta >= 0) added += m.delta; // received, requisition, a count that found more
+          else sold -= m.delta;                    // a count that found less
+        }
+        const open = r3(i.qty - after);
+        const row = {
+          id: i.id, name: i.name, unit: i.unit, min: i.min,
+          open, added: r3(added), total: r3(open + added), sold: r3(sold), comp: r3(comp), closing: r3(open + during),
+        };
+        row.low = row.closing <= 0 || (i.min > 0 && row.closing <= i.min);
+        if (isM) {
+          const price = i.price || 0, sell = i.sell || 0;
+          row.price = price; row.sell = sell;
+          row.openValue = r3(row.open * price);
+          row.cogs = r3((row.sold + row.comp) * price);
+          row.closeValue = r3(row.closing * price);
+          row.profit = sell > 0 ? r3(row.sold * sell - row.cogs) : null;
+        }
+        rows.push(row);
+      }
+      const out = { date: key, isToday: key === dayKey(new Date()), rows };
+      if (isM) {
+        out.totals = {
+          openValue: r3(rows.reduce((s, r) => s + r.openValue, 0)),
+          cogs: r3(rows.reduce((s, r) => s + r.cogs, 0)),
+          closeValue: r3(rows.reduce((s, r) => s + r.closeValue, 0)),
+          profit: r3(rows.reduce((s, r) => s + (r.profit || 0), 0)),
+        };
+      }
+      return out;
     }),
   },
 

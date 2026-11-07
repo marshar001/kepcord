@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Noto+Serif:wght@700&family=Roboto:wght@400;500;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Noto+Serif:wght@700&family=Roboto:wght@400;500;700&family=Caveat:wght@500;700&display=swap");
 :root {
   --bg: #dba583;        /* peach page */
   --bg-ink: #2b1c17;    /* text that sits on the peach */
@@ -252,3 +252,118 @@ svg .v { fill: var(--ink); font-weight: 700; }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom, 0px)); background: var(--card); color: var(--ink); border: 1px solid var(--ln2); padding: 12px 18px; border-radius: 16px; max-width: 90%; z-index: 60; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); }
 .toast.bad { background: var(--bad); color: #2b0f0a; border-color: var(--bad); }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+
+
+/* ---------- shared: date bar, errors, dialog ---------- */
+.err { color: var(--bad); font-size: 14px; margin: 0 0 10px; }
+.datebar { display: flex; gap: 8px; align-items: center; margin: 4px 0 14px; flex-wrap: wrap; }
+.datebar button { min-width: 46px; padding: 0 12px; font-size: 22px; line-height: 1; }
+.datebar button:last-child { font-size: 15px; }
+.datebar input { width: auto; flex: 1 1 150px; max-width: 220px; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 16px; }
+dialog { border: 0; padding: 0; background: transparent; color: var(--ink); max-width: none; max-height: none; }
+dialog::backdrop { background: rgba(10, 6, 5, 0.68); }
+.dlg { background: var(--card); border-radius: 28px; padding: 20px; width: min(92vw, 420px); max-height: 88dvh; overflow: auto; }
+.dlg h2 { margin: 0 0 4px; }
+.dform { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; margin: 12px 0 0; }
+.dform label { margin: 0; }
+.dform button { min-height: 46px; }
+
+/* ---------- stock book (a notebook page) ---------- */
+.nb {
+  background: #fffefa; color: #26379a; border-radius: 10px; padding: 12px 8px 8px; margin-bottom: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); font-family: "Caveat", "Bradley Hand", "Segoe Print", cursive;
+}
+.nbhead { display: flex; gap: 22px; font-size: 26px; font-weight: 700; padding: 0 8px 8px; line-height: 1.1; }
+.nbempty { font-size: 22px; padding: 6px 8px 14px; margin: 0; }
+.nbt { border-collapse: collapse; width: 100%; min-width: 330px; font-size: 24px; }
+.nbt th {
+  font: 700 15px/1.05 "Caveat", "Bradley Hand", "Segoe Print", cursive; color: #26379a; text-align: center;
+  border-bottom: 2px solid #6f86c9; border-left: 1px solid #9db4d8; padding: 4px 2px;
+}
+.nbt th:first-child { border-left: 0; }
+.nbt td { border-bottom: 1px solid #aebfe0; border-left: 1px solid #aebfe0; text-align: center; height: 50px; padding: 0 2px; color: #26379a; }
+.nbt td.nm { border-left: 0; text-align: left; font-size: 22px; line-height: 1.05; padding: 0 4px 0 6px; }
+.nbt td.lowc { color: #b3261e; font-weight: 700; }
+.nbt tr.nbrow { cursor: pointer; }
+.nbt tr.nbrow:hover { background: #f1f5ff; }
+.nmbtn { border: 0; background: none; color: inherit; font: inherit; text-align: left; min-height: 48px; width: 100%; padding: 0; border-radius: 6px; }
+.nmbtn:focus-visible { outline: 3px solid #d99a00; }
+
+/* ---------- kitchen inventory sheet and the purchase requisition form (paper) ---------- */
+.sheet, .paper { background: #fbf9f3; color: #1c1c1a; border-radius: 8px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); margin-bottom: 16px; font-family: "Noto Serif", Georgia, serif; }
+.sheet { padding: 16px 0 14px; }
+.sheet-title { font: 700 16px/1.25 var(--serif); text-transform: uppercase; letter-spacing: 0.03em; margin: 0 14px 12px; }
+.sheet .sc { overflow: auto; }
+.kt { min-width: 1200px; font-size: 13px; font-family: Roboto, system-ui, sans-serif; }
+.kt th { background: #efebe2; color: #222; border: 1px solid #666; font: 700 10.5px/1.15 Roboto, sans-serif; text-transform: uppercase; padding: 6px 4px; text-align: center; }
+.kt td { border: 1px solid #8a8a82; padding: 0 6px; height: 38px; text-align: right; color: #1c1c1a; font-variant-numeric: tabular-nums; vertical-align: middle; }
+.kt th.item, .kt td.item { position: sticky; left: 0; z-index: 1; text-align: left; min-width: 122px; }
+.kt td.item { background: #fbf9f3; font-weight: 500; }
+.kt th.item { background: #efebe2; }
+.kt td.item small { color: #6b6a60; font-weight: 400; margin-left: 4px; }
+.kt td.neg { color: #b3261e; }
+.kt td.low { color: #b3261e; font-weight: 700; }
+.kt tfoot td { background: #efebe2; font-weight: 700; border-color: #666; }
+.kt tfoot td.item { background: #efebe2; }
+.kt input { width: 86px; min-height: 30px; padding: 0 4px; text-align: right; background: #fff; color: #1c1c1a; border: 1px solid #b9b7ab; border-radius: 6px; font: inherit; }
+.sumbox { margin: 16px 14px 0; width: min(100%, 360px); border-collapse: collapse; font-family: Roboto, system-ui, sans-serif; font-size: 14px; }
+.sumbox td { border: 1px solid #666; padding: 8px 10px; color: #1c1c1a; }
+.sumbox td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.fine { color: #6b6a60; font-size: 12px; margin: 10px 14px 0; font-family: Roboto, system-ui, sans-serif; }
+
+.paper { padding: 22px 12px 20px; max-width: 760px; margin-inline: auto; }
+.paper .co { text-align: center; font: 700 18px/1.25 var(--serif); text-transform: uppercase; letter-spacing: 0.04em; }
+.paper .ttl { text-align: center; font: 700 15px/1.2 var(--serif); text-transform: uppercase; letter-spacing: 0.03em; margin: 12px 0 18px; }
+.paper .dt, .paper .by { font-size: 15px; margin: 0 0 12px; }
+.paper .dt span, .paper .by span { display: inline-block; min-width: 150px; border-bottom: 2px dotted #555; padding: 0 8px 0 6px; }
+.pf { table-layout: fixed; border: 1.5px solid #333; font-size: 13px; }
+.pf th { border: 1px solid #333; background: none; color: #222; font: 700 10.5px/1.15 var(--serif); text-transform: uppercase; padding: 6px 3px; text-align: left; }
+.pf td { border: 1px solid #444; height: 40px; padding: 0 4px; vertical-align: middle; color: #1c1c1a; }
+.pf td.n, .pf th.n { text-align: right; }
+.pf td small { color: #6b6a60; display: block; font-size: 11px; line-height: 1.1; }
+.pf input { width: 100%; min-height: 34px; padding: 0 2px; background: transparent; border: 0; border-bottom: 1px dashed #a9a79b; border-radius: 0; color: #1c1c1a; font: inherit; }
+.pf input::-webkit-outer-spin-button, .pf input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.pf input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+.pf tr.blank { display: none; }
+.pf tfoot td { font-weight: 700; background: #efebe2; }
+.pf td.nm { overflow-wrap: anywhere; line-height: 1.15; }
+
+@media print {
+  body { background: #fff !important; }
+  .topbar, .backdrop, aside, .noprint, .toast, .float, dialog { display: none !important; }
+  .shell { display: block; padding: 0; }
+  .pg { background: none; margin: 0; padding: 0; width: auto; max-width: none; min-height: 0; border-radius: 0; }
+  .sheet, .paper { box-shadow: none; border-radius: 0; max-width: none; margin: 0; }
+  .paper { padding: 0; }
+  .pf tr.blank { display: table-row; }
+  .pf input { border: 0; }
+  .sheet .sc { overflow: visible; }
+  .kt { min-width: 0; font-size: 8.5px; }
+  .kt th.item, .kt td.item { position: static; }
+  .kt input { border: 0; background: none; width: auto; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+/* fit the paper form and the notebook on a phone without sideways scrolling */
+.sc .pf { min-width: 0; }
+.sc .nbt { min-width: 0; font-size: 21px; }
+.nbt th { font-size: 13px; }
+.nbt td.nm { font-size: 19px; }
+.nbt td { padding: 0 1px; }
+td.nm, .nbt td.nm { overflow-wrap: anywhere; }
+.pf td input { width: 100%; min-height: 34px; padding: 0 2px; }
+.pf th, .pf td { font-size: 12px; }
+.pf th { overflow-wrap: anywhere; }
+.paper { padding-inline: 8px; }
+.arr { background: var(--card); border-radius: 20px; padding: 12px 14px; margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
+.arr .it { flex: 1 1 100%; overflow-wrap: anywhere; }
+.arr input { width: 90px; }
+.pf th { font-size: 10px; letter-spacing: 0; padding-inline: 2px; }
+.nbt td.nm, .nbt th:first-child { overflow-wrap: normal; word-break: normal; min-width: 66px; }
+.nbt td { font-size: 19px; }
+.nbt td.nm .nmbtn { font-size: 17px; }
+.nbt td.nm, .nbt th:first-child { min-width: 0; width: 17%; }
+.nbt td { font-size: 17px; }
+.nbt th { font-size: 12px; letter-spacing: -0.2px; }
+.nbt td.nm .nmbtn { font-size: 16px; }
