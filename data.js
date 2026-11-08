@@ -238,7 +238,9 @@ const api = {
           : { id: i.id, name: i.name, unit: i.unit, qty: i.qty, min: i.min, low: isLow(i) });
     }),
     add: tx((db, { name, unit, qty, min, price, sell }) => {
-      const m = mgmt(db);
+      const m = me(db);
+      // Anyone can list what is in the kitchen; only management sets prices.
+      if (m.role !== "management") { price = 0; sell = 0; }
       const n = String(name || "").trim();
       if (!n) throw new Error("Enter the ingredient name.");
       if (db.ingredients.some((i) => i.name.toLowerCase() === n.toLowerCase()))
@@ -276,6 +278,20 @@ const api = {
         : mode === "comp"
         ? `Gave ${show(q)} ${i.unit} of ${i.name} free (complimentary)`
         : `Counted ${i.name}: ${show(q)} ${i.unit} (was ${show(i.qty - delta)})`);
+      checkReorder(db, i);
+    }),
+    // Fix today's opening stock (what was in the kitchen at the start of the day).
+    setOpening: tx((db, id, qty) => {
+      const u = me(db);
+      const i = findIng(db, id);
+      const q = Number(qty);
+      if (!Number.isFinite(q) || String(qty) === "" || q < 0) throw new Error("Enter the opening stock, 0 or more.");
+      const start = new Date(); start.setHours(0, 0, 0, 0);
+      const today = db.moves.filter((m) => m.ingredientId === i.id && new Date(m.at) >= start).reduce((t, m) => t + m.delta, 0);
+      const next = r3(i.qty + (q - r3(i.qty - today)));
+      if (next < 0) throw new Error("That opening stock is lower than what has already gone out today.");
+      i.qty = next;
+      addLog(db, u, `Set opening stock of ${i.name} to ${show(q)} ${i.unit}`);
       checkReorder(db, i);
     }),
     setPrices: tx((db, id, { price, sell }) => {

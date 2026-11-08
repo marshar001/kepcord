@@ -367,3 +367,18 @@ td.nm, .nbt td.nm { overflow-wrap: anywhere; }
 .nbt td { font-size: 17px; }
 .nbt th { font-size: 12px; letter-spacing: -0.2px; }
 .nbt td.nm .nmbtn { font-size: 16px; }
+
+/* ---------- editable stock table ---------- */
+.kt.narrow { min-width: 0; font-size: 12px; }
+.kt.narrow th { font-size: 9px; padding: 6px 2px; }
+.kt.narrow td { padding: 0 2px; }
+.kt.narrow th.item, .kt.narrow td.item { min-width: 70px; }
+.kt td input:not([type]), .kt .newrow input, .kt .newrow select { width: 100%; min-width: 0; }
+.kt td input[type=number] { width: 100%; min-width: 52px; }
+.kt.narrow td input[type=number] { min-width: 0; padding: 0 1px; }
+.kt .newrow td { background: #f6f2e6; }
+.kt .newrow select { margin-top: 4px; min-height: 30px; background: #fff; color: #1c1c1a; border: 1px solid #b9b7ab; border-radius: 6px; padding: 0 2px; }
+.kt .newrow button { min-height: 34px; padding: 0 12px; }
+.kt .rm { min-height: 26px; min-width: 26px; padding: 0; border-radius: 13px; font-size: 16px; line-height: 1; background: #eadfd3; color: #7a1f14; border: 0; }
+.kt td.low, .kt td.low input { color: #b3261e; font-weight: 700; }
+.kt td:has(input) { padding: 2px; background: #fff; }
