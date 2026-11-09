@@ -14,20 +14,28 @@ function stockGrid(me, root, opts) {
   }
 
   const inp = (r, f, v, ed) => ed
-    ? `<td${f === "closing" && r.low ? ' class="low"' : ""}><input type="number" inputmode="decimal" step="any" min="0" value="${num(v)}" data-id="${r.id}" data-f="${f}" aria-label="${f} of ${esc(r.name)}"></td>`
-    : `<td data-c="${f}" data-id="${r.id}"${f === "closing" && r.low ? ' class="low"' : ""}>${qtyText(v)}</td>`;
+    ? `<td class="in${f === "closing" && r.low ? " low" : ""}"><input type="number" inputmode="decimal" step="any" min="0" value="${num(v)}" data-id="${r.id}" data-f="${f}" aria-label="${f} of ${esc(r.name)}"></td>`
+    : `<td class="cal${f === "closing" && r.low ? " low" : ""}" data-c="${f}" data-id="${r.id}">${qtyText(v)}</td>`;
 
   function draw() {
     const live = sheet.isToday, rows = sheet.rows;
     const colspan = money ? 14 : 7;
+    const tabs = [["stock", "Stock"], ...(money || me.role === "management" ? [["inventory", "Inventory"]] : []), ["requisitions", "Requisitions"]];
+    const profitChip = money ? `<div><b id="c-profit">${naira(sheet.totals.profit)}</b><span>profit</span></div>` : "";
     root.innerHTML = `
       <h1>${money ? "Inventory" : "Stock"}</h1>
-      <p class="mu">${live ? "Type into the white boxes. Sold fills in by itself when orders are recorded; everything else is worked out for you." : "This is a past day. It cannot be changed."}</p>
-      ${dateBarHTML(key)}
-      <div class="actions noprint"><button type="button" id="print">Print this sheet</button></div>
-      <section class="sheet">
-        <h2 class="sheet-title">${money ? "Kitchen inventory" : "Stock"} for ${esc(longDate(key))}</h2>
-        <div class="sc"><table class="kt${money ? "" : " narrow"}">
+      <p class="mu">${live ? "Type in the warm boxes. Sold fills in by itself when orders are recorded; the dark boxes are worked out for you." : "This is a past day. It cannot be changed."}</p>
+      <div class="chips">
+        <div><b>${rows.length}</b><span>items</span></div>
+        <div><b id="c-sold">${sumq("sold")}</b><span>sold</span></div>
+        <div><b id="c-closing">${sumq("closing")}</b><span>left</span></div>
+        ${profitChip}
+      </div>
+      <section class="xl">
+        <div class="xl-rib"><b>${money ? "Kitchen inventory" : "Stock"} · ${esc(longDate(key))}</b><span>${esc(me.name)}</span></div>
+        <div class="xl-bar noprint">${dateBarHTML(key)}<button type="button" id="print">Print</button></div>
+        <div class="fx"><i>fx</i><div id="fxt">Closing = Open + Added − Sold − Comp. Tap a cell to see its working.</div></div>
+        <div class="sc"><table class="xt${money ? "" : " narrow"}">
           <thead><tr><th class="item">Item</th><th>Open stock</th><th>Added stock</th><th>Total stock</th><th>Sold</th><th>Comp</th><th>Closing stock</th>${money ? "<th>Unit price</th><th>Selling price</th><th>Open stock value</th><th>Cost of goods used</th><th>Closing stock value</th><th>Profit</th><th>Reorder at</th>" : ""}</tr></thead>
           <tbody>${rows.map((r) => rowHTML(r, live)).join("")}
             ${live ? `<tr class="newrow noprint"><td class="item"><input id="nName" placeholder="New item" maxlength="60" aria-label="New item name"><select id="nUnit" aria-label="Unit">${unitOptions("kg")}</select></td>
@@ -45,6 +53,7 @@ function stockGrid(me, root, opts) {
           <tr><td>Cost of goods used</td><td id="s-cogs">${naira(sheet.totals.cogs)}</td></tr>
           <tr><td>Profit</td><td id="s-profit">${naira(sheet.totals.profit)}</td></tr></table>` : ""}
         <p class="fine">Total stock = Open + Added. Closing = Total − Sold − Comp. To correct the closing figure after counting, type what you actually counted under Closing; any difference is recorded. ${money ? "Cost of goods used = (Sold + Comp) × Unit price. Profit = Sold × Selling price − Cost of goods used. Prices apply to every day." : ""}</p>
+        <nav class="xl-tabs noprint" aria-label="Sheets">${tabs.map(([id, l]) => `<a href="${id}.html"${id === opts.id ? ' class="on" aria-current="page"' : ""}>${l}</a>`).join("")}</nav>
       </section>`;
     wireDateBar(root, key, (k) => { key = k; load(); });
   }
@@ -53,12 +62,12 @@ function stockGrid(me, root, opts) {
     return `<tr data-row="${r.id}">
       <td class="item">${esc(r.name)}<small>${esc(r.unit)}</small>${live && money ? ` <button type="button" class="rm noprint" data-rm="${r.id}" aria-label="Remove ${esc(r.name)}">×</button>` : ""}</td>
       ${inp(r, "open", r.open, live)}${inp(r, "added", r.added, live)}
-      <td data-c="total" data-id="${r.id}">${qtyText(r.total)}</td><td data-c="sold" data-id="${r.id}">${qtyText(r.sold)}</td>
+      <td class="cal" data-c="total" data-id="${r.id}">${qtyText(r.total)}</td><td class="cal" data-c="sold" data-id="${r.id}">${qtyText(r.sold)}</td>
       ${inp(r, "comp", r.comp, live)}${inp(r, "closing", r.closing, live)}
-      ${money ? `<td><input type="number" inputmode="decimal" step="any" min="0" value="${r.price}" data-id="${r.id}" data-f="price" aria-label="Unit price of ${esc(r.name)}"></td>
-        <td><input type="number" inputmode="decimal" step="any" min="0" value="${r.sell}" data-id="${r.id}" data-f="sell" aria-label="Selling price of ${esc(r.name)}"></td>
-        <td data-c="openValue" data-id="${r.id}">${N(r.openValue)}</td><td data-c="cogs" data-id="${r.id}">${N(r.cogs)}</td><td data-c="closeValue" data-id="${r.id}">${N(r.closeValue)}</td><td data-c="profit" data-id="${r.id}">${r.profit === null ? "—" : N(r.profit)}</td>
-        <td>${live ? `<input type="number" inputmode="decimal" step="any" min="0" value="${r.min}" data-id="${r.id}" data-f="min" aria-label="Reorder level of ${esc(r.name)}">` : qtyText(r.min)}</td>` : ""}</tr>`;
+      ${money ? `<td class="in"><input type="number" inputmode="decimal" step="any" min="0" value="${r.price}" data-id="${r.id}" data-f="price" aria-label="Unit price of ${esc(r.name)}"></td>
+        <td class="in"><input type="number" inputmode="decimal" step="any" min="0" value="${r.sell}" data-id="${r.id}" data-f="sell" aria-label="Selling price of ${esc(r.name)}"></td>
+        <td class="cal" data-c="openValue" data-id="${r.id}">${N(r.openValue)}</td><td class="cal" data-c="cogs" data-id="${r.id}">${N(r.cogs)}</td><td class="cal" data-c="closeValue" data-id="${r.id}">${N(r.closeValue)}</td><td class="cal" data-c="profit" data-id="${r.id}">${r.profit === null ? "—" : N(r.profit)}</td>
+        <td class="${live ? "in" : "cal"}">${live ? `<input type="number" inputmode="decimal" step="any" min="0" value="${r.min}" data-id="${r.id}" data-f="min" aria-label="Reorder level of ${esc(r.name)}">` : qtyText(r.min)}</td>` : ""}</tr>`;
   }
 
   // After an edit, change only the cells whose numbers moved, so nothing the person is typing into is replaced.
@@ -83,9 +92,11 @@ function stockGrid(me, root, opts) {
     }
     const put = (id, v) => { const e = root.querySelector("#" + id); if (e) e.textContent = v; };
     ["open", "added", "total", "sold", "comp", "closing"].forEach((f) => put("t-" + f, sumq(f)));
+    put("c-sold", sumq("sold")); put("c-closing", sumq("closing"));
     if (money) {
       const t = sheet.totals;
       put("t-openValue", N(t.openValue)); put("t-cogs", N(t.cogs)); put("t-closeValue", N(t.closeValue)); put("t-profit", N(t.profit));
+      put("c-profit", naira(t.profit));
       put("s-open", naira(t.openValue)); put("s-close", naira(t.closeValue)); put("s-cogs", naira(t.cogs)); put("s-profit", naira(t.profit));
     }
   }
@@ -133,6 +144,38 @@ function stockGrid(me, root, opts) {
       load();
     }
   });
+  // The formula bar explains how the selected cell is worked out.
+  const LBL = { open: "Open", added: "Added", total: "Total", sold: "Sold", comp: "Comp", closing: "Closing", price: "Unit price", sell: "Selling price", openValue: "Open value", cogs: "Cost of goods used", closeValue: "Closing value", profit: "Profit", min: "Reorder at" };
+  function explain(id, f) {
+    const r = sheet.rows.find((x) => x.id === id);
+    if (!r) return;
+    const q = qtyText;
+    const E = {
+      open: `${r.name} · Open = what was in the kitchen at the start (${q(r.open)} ${r.unit}). Type to correct it.`,
+      added: `${r.name} · Added = stock received today = ${q(r.added)} ${r.unit}. Type a bigger number to add more.`,
+      total: `${r.name} · Total = Open + Added = ${q(r.open)} + ${q(r.added)} = ${q(r.total)}`,
+      sold: `${r.name} · Sold comes from recorded orders = ${q(r.sold)} ${r.unit}`,
+      comp: `${r.name} · Comp = given free today = ${q(r.comp)} ${r.unit}`,
+      closing: `${r.name} · Closing = Total − Sold − Comp = ${q(r.total)} − ${q(r.sold)} − ${q(r.comp)} = ${q(r.closing)} ${r.unit}. Type a count to correct it.`,
+    };
+    if (money) Object.assign(E, {
+      price: `${r.name} · Unit price = what one ${r.unit} costs you`,
+      sell: `${r.name} · Selling price = what one ${r.unit} sells for`,
+      openValue: `${r.name} · Open value = Open × Unit price = ${q(r.open)} × ${N(r.price)} = ${N(r.openValue)}`,
+      cogs: `${r.name} · Cost of goods used = (Sold + Comp) × Unit price = (${q(r.sold)} + ${q(r.comp)}) × ${N(r.price)} = ${N(r.cogs)}`,
+      closeValue: `${r.name} · Closing value = Closing × Unit price = ${q(r.closing)} × ${N(r.price)} = ${N(r.closeValue)}`,
+      profit: `${r.name} · Profit = Sold × Selling price − Cost of goods used = ${q(r.sold)} × ${N(r.sell)} − ${N(r.cogs)} = ${r.profit === null ? "—" : N(r.profit)}`,
+      min: `${r.name} · Reorder at = when closing stock is at or below this, a requisition line is added`,
+    });
+    const fx = root.querySelector("#fxt");
+    if (fx && E[f]) fx.textContent = E[f];
+    root.querySelectorAll("td.sel").forEach((x) => x.classList.remove("sel"));
+    const tr = root.querySelector(`tr[data-row="${id}"]`);
+    const el = tr && (tr.querySelector(`[data-f="${f}"]`) || tr.querySelector(`[data-c="${f}"]`));
+    if (el) (el.closest("td")).classList.add("sel");
+  }
+  root.addEventListener("focusin", (e) => { if (e.target.dataset.f) explain(e.target.dataset.id, e.target.dataset.f); });
+  root.addEventListener("click", (e) => { const td = e.target.closest("td[data-c]"); if (td) explain(td.dataset.id, td.dataset.c); });
   root.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.target.matches("input[data-f]")) e.target.blur();
     if (e.key === "Enter" && e.target.id === "nName" || e.key === "Enter" && e.target.id === "nQty") root.querySelector("#nAdd").click();
