@@ -31,23 +31,26 @@ boot({ id: "requisitions" }, async (me, root) => {
       <h1>Requisitions</h1>
       <p class="mu">Items to buy. Low stock adds lines here by itself; anyone can add a line.</p>
       <div class="actions noprint"><button type="button" id="print">Print form</button></div>
-      <section class="paper">
-        <div class="co">${esc(shop)}</div>
-        <div class="ttl">Purchase requisition form</div>
-        <p class="dt">Date: <span>${dmy(dayKey(new Date()))}</span></p>
-        <div class="sc"><table class="pf">
-          <colgroup><col style="width:36%"><col style="width:16%"><col style="width:24%"><col style="width:24%"></colgroup>
-          <thead><tr><th>Description</th><th class="n">Qty</th><th class="n">Unit price</th><th class="n">Total</th></tr></thead>
+      <div class="chips">
+        <div><b>${reqs.length}</b><span>lines</span></div>
+        <div><b id="c-grand">${naira(grand())}</b><span>total to spend</span></div>
+      </div>
+      <section class="xl">
+        <div class="xl-rib"><b>Purchase requisition · ${esc(shop)}</b><span>${dmy(dayKey(new Date()))}</span></div>
+        <div class="fx"><i>fx</i><div>Total = Quantity × Unit price. Type in the warm boxes to change a line.</div></div>
+        <div class="sc"><table class="xt narrow">
+          <thead><tr><th class="item">Description</th><th>Qty</th><th>Unit price</th><th>Total price</th></tr></thead>
           <tbody>${reqs.map((r) => `<tr>
-            <td class="nm">${esc(r.name)}<small>${esc(r.unit)}${r.reason ? " · " + esc(r.reason) : ""}</small></td>
-            <td class="n"><input type="number" inputmode="decimal" step="any" min="0" value="${r.qty}" data-q="${r.id}" aria-label="Quantity of ${esc(r.name)}"></td>
-            <td class="n"><input type="number" inputmode="decimal" step="any" min="0" value="${r.price || 0}" data-p="${r.id}" aria-label="Unit price of ${esc(r.name)}"></td>
-            <td class="n" data-t="${r.id}">${N(r.qty * (r.price || 0))}</td></tr>`).join("")}
-            ${Array.from({ length: blanks }, () => '<tr class="blank"><td></td><td></td><td></td><td></td></tr>').join("")}</tbody>
-          <tfoot><tr><td colspan="3" class="n">Total</td><td class="n" id="grand">${naira(grand())}</td></tr></tfoot>
+            <td class="item">${esc(r.name)}<small>${esc(r.unit)}</small></td>
+            <td class="in"><input type="number" inputmode="decimal" step="any" min="0" value="${r.qty}" data-q="${r.id}" aria-label="Quantity of ${esc(r.name)}"></td>
+            <td class="in"><input type="number" inputmode="decimal" step="any" min="0" value="${r.price || 0}" data-p="${r.id}" aria-label="Unit price of ${esc(r.name)}"></td>
+            <td class="cal" data-t="${r.id}">${N(r.qty * (r.price || 0))}</td></tr>`).join("")}
+            ${Array.from({ length: blanks }, () => '<tr class="blank"><td class="item"></td><td></td><td></td><td></td></tr>').join("")}</tbody>
+          <tfoot><tr><td class="item">TOTAL</td><td></td><td></td><td id="grand">${naira(grand())}</td></tr></tfoot>
         </table></div>
         ${reqs.length === 0 ? '<p class="fine">Nothing on the form yet. Add a line below.</p>' : ""}
-        <p class="by">Ordered by: <span>${esc(me.name)}</span></p>
+        <p class="fine by">Ordered by: <b>${esc(me.name)}</b></p>
+        <nav class="xl-tabs noprint" aria-label="Sheets"><a href="stock.html">Stock</a>${isM ? '<a href="inventory.html">Inventory</a>' : ""}<a href="requisitions.html" class="on" aria-current="page">Requisitions</a></nav>
       </section>
 
       <section class="noprint">
@@ -97,7 +100,7 @@ boot({ id: "requisitions" }, async (me, root) => {
       await api.requisitions.update(id, { qty: q, price: p });
       const r = reqs.find((x) => x.id === id); r.qty = q; r.price = p;
       tr.querySelector("[data-t]").textContent = N(q * p);
-      root.querySelector("#grand").textContent = naira(grand());
+      root.querySelector("#grand").textContent = naira(grand()); root.querySelector("#c-grand").textContent = naira(grand());
       toast("Saved");
     } catch (err) { toast(err.message, true); load(); }
   });

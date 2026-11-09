@@ -1,10 +1,10 @@
 @import url("https://fonts.googleapis.com/css2?family=Noto+Serif:wght@700&family=Roboto:wght@400;500;700&family=Caveat:wght@500;700&display=swap");
 :root {
-  --bg: #dba583;        /* peach page */
-  --bg-ink: #2b1c17;    /* text that sits on the peach */
-  --panel: #4a3f3a;     /* the big brown box */
-  --card: #1d1614;      /* near-black cards */
-  --field: #2a201d;
+  --bg: #1d1614;        /* night-kitchen page */
+  --bg-ink: #2b1c17;    /* text that sits on the peach login page */
+  --panel: transparent; /* page sits straight on the dark background */
+  --card: #2d221e;      /* warm dark cards */
+  --field: #1d1614;
   --ink: #f6eae1;
   --mu: #c9b5a8;
   --ln: #5f514b;
@@ -101,7 +101,7 @@ aside nav a.on .chev { opacity: 1; }
 .out { min-height: 46px; border-color: var(--ln2); color: var(--ink); font-weight: 500; }
 .pg {
   margin: calc(76px + env(safe-area-inset-top, 0px)) auto 10px; width: calc(100% - 20px); max-width: 1000px;
-  padding: 22px 16px 100px; background: var(--panel); border-radius: 28px;
+  padding: 14px 6px 100px; background: var(--panel); border-radius: 0;
 }
 @media (min-width: 900px) {
   .shell { display: grid; grid-template-columns: 284px 1fr; gap: 12px; padding: 12px; }
@@ -223,7 +223,7 @@ svg .v { fill: var(--ink); font-weight: 700; }
 .dishrow .top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
 
 /* ---------- login (peach page, dark card) ---------- */
-.auth { min-height: 100dvh; color: var(--bg-ink); display: flex; flex-direction: column; align-items: center; padding: calc(34px + env(safe-area-inset-top, 0px)) 16px calc(30px + env(safe-area-inset-bottom, 0px)); }
+.auth { background: #dba583; min-height: 100dvh; color: var(--bg-ink); display: flex; flex-direction: column; align-items: center; padding: calc(34px + env(safe-area-inset-top, 0px)) 16px calc(30px + env(safe-area-inset-bottom, 0px)); }
 .mark { display: flex; align-items: center; gap: 12px; margin-bottom: 34px; }
 .logo { width: 46px; height: 46px; background: var(--card); color: var(--acc); border-radius: 16px; display: grid; place-items: center; font: 700 24px/1 var(--serif); box-shadow: 0 10px 22px rgba(43, 28, 23, 0.35); }
 .word { font-size: 28px; letter-spacing: 0.14em; }
@@ -382,3 +382,69 @@ td.nm, .nbt td.nm { overflow-wrap: anywhere; }
 .kt .rm { min-height: 26px; min-width: 26px; padding: 0; border-radius: 13px; font-size: 16px; line-height: 1; background: #eadfd3; color: #7a1f14; border: 0; }
 .kt td.low, .kt td.low input { color: #b3261e; font-weight: 700; }
 .kt td:has(input) { padding: 2px; background: #fff; }
+
+
+/* ---------- the stock sheet: spreadsheet layout in the night-kitchen colours ---------- */
+.pg h1 { font-size: 28px; }
+.chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; margin: 0 0 12px; }
+.chips div { background: var(--card); border-radius: 22px; padding: 10px 8px; text-align: center; }
+.chips b { display: block; font-size: 20px; color: var(--acc); font-variant-numeric: tabular-nums; }
+.chips span { font-size: 11px; color: var(--mu); }
+.xl { background: var(--card); border-radius: 26px; overflow: hidden; margin-bottom: 16px; }
+.xl-rib { background: var(--acc); color: var(--acc-ink); padding: 12px 16px; display: flex; justify-content: space-between; gap: 10px; font-weight: 700; }
+.xl-rib span { font-weight: 500; font-size: 13px; opacity: 0.8; }
+.xl-bar { display: flex; gap: 8px; align-items: center; padding: 8px 10px; background: #251b18; border-bottom: 1px solid var(--ln); flex-wrap: wrap; }
+.xl-bar .datebar { margin: 0; flex: 1 1 auto; flex-wrap: nowrap; }
+.xl-bar .datebar button { min-width: 40px; min-height: 40px; padding: 0 8px; }
+.xl-bar .datebar input { min-height: 40px; flex: 1 1 110px; }
+.xl-bar > button { min-height: 40px; padding: 0 14px; }
+.fx { display: flex; border-bottom: 1px solid var(--ln); font-size: 13px; background: #251b18; }
+.fx i { font-style: italic; font-weight: 700; color: var(--acc); padding: 8px 12px; border-right: 1px solid var(--ln); }
+.fx div { padding: 8px 12px; color: var(--mu); min-width: 0; overflow-wrap: anywhere; }
+.xl .sc { overflow: auto; }
+.xt { min-width: 1280px; font-size: 14px; border-collapse: collapse; }
+.xt.narrow { min-width: 0; font-size: 13px; }
+.xt th { background: #3a2d28; color: var(--ink); border: 1px solid var(--ln); font: 600 11px/1.15 Roboto, system-ui, sans-serif; padding: 7px 3px; text-align: center; }
+.xt td { border: 1px solid var(--ln); padding: 0 6px; height: 42px; text-align: right; vertical-align: middle; font-variant-numeric: tabular-nums; }
+.xt td.cal { background: var(--field); color: var(--mu); }
+.xt td.in { background: #4a382d; padding: 2px; }
+.xt td.sel { outline: 2px solid var(--gold); outline-offset: -2px; }
+.xt th.item, .xt td.item { position: sticky; left: 0; z-index: 1; text-align: left; min-width: 96px; background: #33261f; color: var(--ink); font-weight: 600; }
+.xt.narrow th.item, .xt.narrow td.item { min-width: 62px; padding: 0 4px; }
+.xt.narrow th { font-size: 9px; padding: 7px 1px; }
+.xt.narrow td { padding: 0 3px; }
+.xt td.item small { color: var(--mu); font-weight: 400; margin-left: 4px; }
+.xt td input { width: 100%; min-width: 48px; min-height: 36px; padding: 0 5px; text-align: right; background: transparent; border: 0; border-radius: 8px; color: var(--ink); font: inherit; font-weight: 600; }
+.xt.narrow td input { min-width: 0; padding: 0 2px; }
+.xt td input:focus { background: #5b4638; }
+.xt td input::-webkit-outer-spin-button, .xt td input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.xt td input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+.xt td.low, .xt td.low input { color: var(--bad); font-weight: 700; }
+.xt tfoot td { background: #3a2d28; color: var(--acc); font-weight: 700; border-top: 2px solid var(--acc); }
+.xt tfoot td.item { background: #3a2d28; }
+.xt .newrow td { background: #251b18; }
+.xt .newrow td.item { background: #251b18; }
+.xt .newrow input, .xt .newrow select { min-height: 36px; background: var(--field); border: 1px solid var(--ln2); color: var(--ink); text-align: left; border-radius: 10px; padding: 0 6px; font-weight: 400; }
+.xt .newrow select { margin-top: 4px; width: 100%; }
+.xt .newrow button { min-height: 38px; padding: 0 14px; }
+.xt .rm { min-height: 26px; min-width: 26px; padding: 0; border-radius: 13px; font-size: 16px; line-height: 1; border: 0; background: #5b3a32; color: var(--bad); margin-left: 4px; }
+.xl .sumbox { margin: 14px; background: var(--field); border-radius: 18px; overflow: hidden; width: calc(100% - 28px); max-width: 380px; }
+.xl .sumbox td { border: 0; border-bottom: 1px solid var(--ln); color: var(--ink); padding: 9px 12px; }
+.xl .sumbox tr:last-child td { border-bottom: 0; }
+.xl .fine { color: var(--mu); margin: 8px 14px 12px; }
+.xl-tabs { display: flex; background: #251b18; border-top: 1px solid var(--ln); }
+.xl-tabs a { flex: 1; text-align: center; padding: 13px 8px; color: var(--mu); text-decoration: none; font-weight: 600; font-size: 14px; border-top: 3px solid transparent; }
+.xl-tabs a.on { background: var(--card); color: var(--acc); border-top-color: var(--acc); }
+@media print {
+  .chips, .xl-tabs, .fx { display: none !important; }
+  .xl, .xl-rib, .xt th, .xt td, .xt td.cal, .xt td.in, .xt td.item, .xt tfoot td { background: #fff !important; color: #000 !important; border-color: #666 !important; }
+  .xl-rib { border-bottom: 2px solid #000; }
+  .xt { min-width: 0; font-size: 8.5px; }
+  .xt th.item, .xt td.item { position: static; }
+  .xt td input { color: #000; padding: 0; }
+  .xl .sumbox td { color: #000; }
+  .xl .fine { color: #333; }
+}
+.xt tr.blank { display: none; }
+@media print { .xt tr.blank { display: table-row; } .xt tr.blank td { height: 30px; } }
+.xt td.cal[data-t] { text-align: right; }
